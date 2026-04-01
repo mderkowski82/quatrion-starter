@@ -1,0 +1,117 @@
+# =============================================================================
+# quatrion-starter — Hybrid dev mode (backend from IntelliJ/Gradle, rest in Docker)
+#
+# Use this when developing the backend locally (./gradlew quarkusDev or IntelliJ run config).
+# Starts: PostgreSQL + Keycloak + Frontend (Docker image)
+# Backend runs on the host machine.
+#
+# Usage:
+#   docker compose -f docker-compose.infra.yml up -d
+#   # then run backend from IntelliJ or: ./gradlew quarkusDev
+#
+# URLs:
+#   Frontend   : http://localhost:3000
+#   Backend    : http://localhost:8080  (run locally)
+#   Keycloak   : http://localhost:8180  (or http://host.docker.internal:8180)
+#   PostgreSQL : localhost:5432
+# =============================================================================
+
+services:
+  # ── PostgreSQL ──────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: portal
+      POSTGRES_USER: ${PORTAL_DB_USER:-portal}
+      POSTGRES_PASSWORD: ${PORTAL_DB_PASSWORD:-portal}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./init-databases.sh:/docker-entrypoint-initdb.d/init-databases.sh:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PORTAL_DB_USER:-portal}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # ── Keycloak ─────────────────────────────────────────────────────────────────
+  keycloak:
+    image: quay.io/keycloak/keycloak:25.0
+    command: start-dev --import-realm --health-enabled=true
+    environment:
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      KC_HTTP_PORT: 8080
+      KC_HEALTH_ENABLED: "true"
+      # Fix issuer mismatch in the hybrid dev setup (backend on host, frontend+keycloak in Docker).
+      #
+      # Problem: Auth.js v5 (openid-client) strictly validates that the configured issuer
+      # matches the issuer returned in the OIDC discovery document.
+      #   - Frontend (Docker) uses KEYCLOAK_URL=http://host.docker.internal:8180
+      #   - Configured issuer = http://host.docker.internal:8180/realms/quatrion
+      #   - KC_HOSTNAME_URL forces Keycloak to return the SAME URL in discovery → match ✓
+      #
+      # host.docker.internal resolves on:
+      #   - Windows/Mac Docker Desktop: automatically added to the host's hosts file (→ 127.0.0.1)
+      #   - Linux: add "host.docker.internal:host-gateway" under extra_hosts in this service
+      #
+      # All three consumers reach Keycloak via host.docker.internal:8180:
+      #   - Browser on host     → host.docker.internal = 127.0.0.1 → port 8180 → Keycloak ✓
+      #   - Frontend (Docker)   → host.docker.internal = host gateway → port 8180 → Keycloak ✓
+      #   - Backend (IntelliJ)  → fetches OIDC discovery via localhost:8180, validates JWT issuer
+      #                           from discovery (host.docker.internal:8180) → match ✓
+      KC_HOSTNAME_URL: "http://host.docker.internal:8180"
+      KC_HOSTNAME_STRICT: "false"
+      KC_HOSTNAME_STRICT_HTTPS: "false"
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: ${PORTAL_DB_USER:-portal}
+      KC_DB_PASSWORD: ${PORTAL_DB_PASSWORD:-portal}
+    volumes:
+      - ./keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
+    ports:
+      - "8180:8080"
+      - "9000:9000"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/9000 && echo -e 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && cat <&3 | grep -q '\"status\": \"UP\"'"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 40s
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ── Frontend (Next.js — pulled image, no local sources needed) ────────────
+  frontend:
+    image: ghcr.io/mderkowski82/quatrion-portal-frontend:${FRONTEND_VERSION:-latest}
+    environment:
+      BACKEND_URL: "http://host.docker.internal:8080"
+      AUTH_SECRET: ${AUTH_SECRET}
+      AUTH_TRUST_HOST: "true"
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+      # Must match KC_HOSTNAME_URL so that Auth.js v5 issuer validation passes.
+      # host.docker.internal is reachable both from inside Docker and from the host browser.
+      KEYCLOAK_URL: "http://host.docker.internal:8180"
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-quatrion}
+      KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-quatrion-frontend}
+      KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET:-quatrion-frontend-dev-secret}
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+    depends_on:
+      keycloak:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/auth/csrf || exit 1" ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 15s
+
+volumes:
+  pgdata:
+
