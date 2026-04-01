@@ -1,6 +1,6 @@
 package com.example.portal.config
 
-import com.example.portal.entity.Product
+import com.example.portal.entity.*
 import dev.quatrion.portal.config.*
 import io.quarkus.runtime.StartupEvent
 import jakarta.annotation.PostConstruct
@@ -24,16 +24,26 @@ class AppModuleConfig : PortalModuleConfig() {
 
     @PostConstruct
     fun init() {
-        // This method is called after the bean is constructed and dependencies are injected.
-        // You can perform any additional initialization here if needed.
         log.info("AppModuleConfig initialized with ${modules().size} module(s).")
     }
 
     override fun modules() = listOf(
         ModuleDef(
-            name = "Catalog", label = "Katalog", icon = "package", order = 1,
-            defaultEntity = Product::class.java,
-            entities = listOf(EntityRef(entityClass = Product::class.java, group = "Produkty", order = 1))
+            name = "Library",
+            label = "Biblioteka",
+            icon = "book-open",
+            order = 1,
+            defaultEntity = Book::class.java,
+            entities = listOf(
+                // Słowniki — encje pomocnicze bez zakładek (płaskie formularze)
+                EntityRef(entityClass = Genre::class.java,  group = "Słowniki",   order = 1),
+                EntityRef(entityClass = Author::class.java, group = "Słowniki",   order = 2),
+                // Katalog — centralna encja z zakładkami, akcjami i security
+                EntityRef(entityClass = Book::class.java,   group = "Katalog",    order = 1),
+                // Użytkownicy i operacje
+                EntityRef(entityClass = Member::class.java, group = "Użytkownicy", order = 1),
+                EntityRef(entityClass = Loan::class.java,   group = "Operacje",   order = 1)
+            )
         )
     )
 }
