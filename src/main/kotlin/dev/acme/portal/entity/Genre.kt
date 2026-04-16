@@ -1,6 +1,7 @@
-package com.example.portal.entity
+package dev.acme.portal.entity
 
 import dev.quatrion.portal.annotation.*
+import io.quarkus.hibernate.reactive.panache.kotlin.PanacheEntityBase
 import jakarta.persistence.*
 
 // ─── Encja: Gatunek literacki ────────────────────────────────────────────────
@@ -10,11 +11,12 @@ import jakarta.persistence.*
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Entity
-@Table(name = "genre")
 @PortalEntity(
     label = "Gatunek",
+    labelKey = "entity.genre",
     module = "Library",
     group = "Słowniki",
+    groupKey = "group.dictionaries",
     icon = "bookmark",
     order = 1,
     description = "Słownik gatunków literackich — może być hierarchiczny (gatunek nadrzędny)",
@@ -22,12 +24,12 @@ import jakarta.persistence.*
     softDelete = true,
     pageSize = 50
 )
-class Genre {
+class Genre: PanacheEntityBase {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @PortalField(
-        label = "ID",
+        label = "ID", labelKey = "field.common.id",
         order = 0,
         readonly = true,
         showInFilter = false,
@@ -51,6 +53,7 @@ class Genre {
     @Column(length = 50)
     @PortalField(
         label = "Skrót",
+        labelKey = "field.genre.abbreviation",
         order = 2,
         renderer = RendererType.TEXT,
         filterType = FilterType.STARTS_WITH,
@@ -63,6 +66,7 @@ class Genre {
     @Column(length = 7)
     @PortalField(
         label = "Kolor",
+        labelKey = "field.genre.color",
         order = 3,
         renderer = RendererType.COLOR,
         filterType = FilterType.NONE,
@@ -75,6 +79,7 @@ class Genre {
     @Column(columnDefinition = "TEXT")
     @PortalField(
         label = "Opis",
+        labelKey = "field.common.description",
         order = 4,
         renderer = RendererType.TEXTAREA,
         filterType = FilterType.NONE,
@@ -87,6 +92,7 @@ class Genre {
     @Column(nullable = false)
     @PortalField(
         label = "Aktywny",
+        labelKey = "field.common.isActive",
         order = 5,
         renderer = RendererType.BOOLEAN,
         filterType = FilterType.BOOLEAN,
@@ -98,6 +104,7 @@ class Genre {
     @Column
     @PortalField(
         label = "Gatunek nadrzędny",
+        labelKey = "field.genre.parentId",
         order = 6,
         renderer = RendererType.RELATION,
         filterType = FilterType.EXACT,
@@ -124,4 +131,3 @@ class Genre {
     @PortalField(label = "Usunięty", hidden = true)
     var deleted: Boolean = false
 }
-

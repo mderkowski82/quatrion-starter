@@ -1,12 +1,13 @@
-package com.example.portal.entity
+package dev.acme.portal.entity
 
 import dev.quatrion.portal.annotation.*
-import dev.quatrion.portal.model.ActionHandler
 import dev.quatrion.portal.model.ActionResult
 import dev.quatrion.portal.model.EntityData
 import io.quarkus.arc.Unremovable
+import io.quarkus.hibernate.reactive.panache.kotlin.PanacheEntityBase
 import jakarta.enterprise.context.ApplicationScoped
 import jakarta.persistence.*
+import org.hibernate.annotations.Formula
 
 // ─── Enums ───────────────────────────────────────────────────────────────────
 
@@ -46,23 +47,18 @@ data class ExtendLoanForm(
 
 @ApplicationScoped
 @Unremovable
-class ReturnBookHandler : ActionHandler<EntityData> {
-    override val actionName = "returnBook"
-
-    override suspend fun validate(entity: EntityData, formData: EntityData?): String? {
-        val status = entity["status"] as? String
-        return when (status) {
-            "RETURNED" -> "Książka została już zwrócona"
-            "CANCELLED" -> "Wypożyczenie zostało anulowane — zwrot niemożliwy"
-            else -> null
+class ReturnBookHandler {
+    suspend fun validate(entity: dev.acme.portal.entity.Loan, formData: EntityData?): String? {
+        return when (entity.status) {
+            _root_ide_package_.dev.acme.portal.entity.LoanStatus.RETURNED  -> "Książka została już zwrócona"
+            _root_ide_package_.dev.acme.portal.entity.LoanStatus.CANCELLED -> "Wypożyczenie zostało anulowane — zwrot niemożliwy"
+            else                 -> null
         }
     }
 
-    override suspend fun execute(entity: EntityData, formData: EntityData?): ActionResult {
-        val id = entity["id"]
-        // logika: ustawienie returnDate = today, status = RETURNED, odblokowanie egzemplarza
+    suspend fun execute(entity: dev.acme.portal.entity.Loan, formData: EntityData?): ActionResult {
         return ActionResult.Success(
-            "Zwrot wypożyczenia #$id zarejestrowany pomyślnie.",
+            "Zwrot wypożyczenia #${entity.id} zarejestrowany pomyślnie.",
             refreshTable = true
         )
     }
@@ -70,27 +66,21 @@ class ReturnBookHandler : ActionHandler<EntityData> {
 
 @ApplicationScoped
 @Unremovable
-class ExtendLoanHandler : ActionHandler<EntityData> {
-    override val actionName = "extendLoan"
-
-    override suspend fun validate(entity: EntityData, formData: EntityData?): String? {
-        val status = entity["status"] as? String
-        val renewalCount = (entity["renewalCount"] as? Int) ?: 0
+class ExtendLoanHandler {
+    suspend fun validate(entity: dev.acme.portal.entity.Loan, formData: EntityData?): String? {
         return when {
-            status == "RETURNED" -> "Nie można przedłużyć zwróconego wypożyczenia"
-            status == "CANCELLED" -> "Nie można przedłużyć anulowanego wypożyczenia"
-            renewalCount >= 3 -> "Osiągnięto limit 3 przedłużeń dla tego wypożyczenia"
-            else -> null
+            entity.status == _root_ide_package_.dev.acme.portal.entity.LoanStatus.RETURNED  -> "Nie można przedłużyć zwróconego wypożyczenia"
+            entity.status == _root_ide_package_.dev.acme.portal.entity.LoanStatus.CANCELLED -> "Nie można przedłużyć anulowanego wypożyczenia"
+            entity.renewalCount >= 3              -> "Osiągnięto limit 3 przedłużeń dla tego wypożyczenia"
+            else                                  -> null
         }
     }
 
-    override suspend fun execute(entity: EntityData, formData: EntityData?): ActionResult {
-        val id = entity["id"]
+    suspend fun execute(entity: dev.acme.portal.entity.Loan, formData: EntityData?): ActionResult {
         val newDueDate = formData?.get("newDueDate") as? String ?: ""
-        val reason = formData?.get("reason") as? String ?: ""
-        // logika: aktualizacja dueDate, inkrementacja renewalCount, status = EXTENDED
+        val reason     = formData?.get("reason") as? String ?: ""
         return ActionResult.Success(
-            "Wypożyczenie #$id przedłużone do $newDueDate. Powód: $reason",
+            "Wypożyczenie #${entity.id} przedłużone do $newDueDate. Powód: $reason",
             refreshTable = true
         )
     }
@@ -108,14 +98,16 @@ class ExtendLoanHandler : ActionHandler<EntityData> {
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Entity
-@Table(name = "loan")
 @PortalEntity(
     label = "Wypożyczenie",
+    labelKey = "entity.loan",
     module = "Library",
     group = "Operacje",
+    groupKey = "group.operations",
     icon = "calendar-check",
     order = 5,
     description = "Rejestr wypożyczeń — łączy czytelnika z wypożyczoną książką",
+    descriptionKey = "entity.loan.description",
     allowEdit = true,
     auditLog = true,
     pageSize = 30
@@ -129,38 +121,42 @@ class ExtendLoanHandler : ActionHandler<EntityData> {
 @PortalAction(
     name = "returnBook",
     label = "Zarejestruj zwrot",
+    labelKey = "action.loan.returnBook",
     icon = "book-check",
-    handler = ReturnBookHandler::class,
+    handler = _root_ide_package_.dev.acme.portal.entity.ReturnBookHandler::class,
     confirmMessage = "Czy potwierdzasz zwrot książki? Operacja ustawia datę dzisiejszą jako datę zwrotu.",
+    confirmMessageKey = "action.loan.returnBook.confirm",
     variant = "destructive",
     order = 1
 )
 @PortalAction(
     name = "extendLoan",
     label = "Przedłuż wypożyczenie",
+    labelKey = "action.loan.extend",
     icon = "calendar-plus",
-    handler = ExtendLoanHandler::class,
-    formModel = ExtendLoanForm::class,
+    handler = _root_ide_package_.dev.acme.portal.entity.ExtendLoanHandler::class,
+    formModel = _root_ide_package_.dev.acme.portal.entity.ExtendLoanForm::class,
     variant = "outline",
     order = 2
 )
-class Loan {
+class Loan: PanacheEntityBase {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @PortalField(label = "ID", order = 0, readonly = true, showInFilter = false, width = 80)
+    @PortalField(label = "ID", labelKey = "field.common.id", order = 0, readonly = true, showInFilter = false, width = 80)
     var id: Long = 0
 
     // Relacja do Czytelnika — zablokowana (editable=false), nie można zmienić po utworzeniu
     @Column(nullable = false)
     @PortalField(
-        label = "Czytelnik",
+        label = "Czytelnik", labelKey = "field.loan.memberId",
         order = 1, required = true,
         renderer = RendererType.RELATION, filterType = FilterType.EXACT,
-        tooltip = "Czytelnik nie może być zmieniony po założeniu wypożyczenia"
+        tooltip = "Czytelnik nie może być zmieniony po założeniu wypożyczenia",
+        tooltipKey = "tooltip.loan.memberId"
     )
     @PortalRelation(
-        targetEntity = Member::class,
+        targetEntity = _root_ide_package_.dev.acme.portal.entity.Member::class,
         editable = false,
         displayFields = ["firstName", "lastName", "email"],
         searchFields = ["firstName", "lastName", "email"]
@@ -179,15 +175,16 @@ class Loan {
 
     @Transient
     @PortalField(
-        label = "Filtruj po gatunku (pomocnicze)",
+        label = "Filtruj po gatunku (pomocnicze)", labelKey = "field.loan.genreFilter",
         order = 2,
         renderer = RendererType.RELATION,
         filterType = FilterType.NONE,
         showInTable = false, showInFilter = false,
-        tooltip = "Wybierz gatunek, aby zawęzić listę dostępnych książek poniżej"
+        tooltip = "Wybierz gatunek, aby zawęzić listę dostępnych książek poniżej",
+        tooltipKey = "tooltip.loan.genreFilter"
     )
     @PortalRelation(
-        targetEntity = Genre::class,
+        targetEntity = _root_ide_package_.dev.acme.portal.entity.Genre::class,
         editable = true,
         displayFields = ["name"],
         searchFields = ["name"]
@@ -204,13 +201,14 @@ class Loan {
     // Dzięki temu lista książek jest filtrowana do wybranego gatunku
     @Column(nullable = false)
     @PortalField(
-        label = "Książka",
+        label = "Książka", labelKey = "field.loan.bookId",
         order = 3, required = true,
         renderer = RendererType.RELATION, filterType = FilterType.EXACT,
-        tooltip = "Wybierz gatunek powyżej, aby zawęzić listę"
+        tooltip = "Wybierz gatunek powyżej, aby zawęzić listę",
+        tooltipKey = "tooltip.loan.bookId"
     )
     @PortalRelation(
-        targetEntity = Book::class,
+        targetEntity = _root_ide_package_.dev.acme.portal.entity.Book::class,
         editable = true,
         displayFields = ["title", "isbn", "status"],
         searchFields = ["title", "isbn"],
@@ -225,43 +223,74 @@ class Loan {
     )
     var bookId: Long? = null
 
-    @Column(nullable = false)
+    @Formula("(SELECT b.title FROM book b WHERE b.id = book_id)")
     @PortalField(
-        label = "Status wypożyczenia",
-        order = 4,
-        renderer = RendererType.SELECT, filterType = FilterType.IN,
-        selectEnum = LoanStatus::class,
-        defaultValue = "ACTIVE"
+        label = "Tytuł książki", labelKey = "field.loan.bookTitle",
+        order = 11,
+        renderer = RendererType.TEXT,
+        filterType = FilterType.NONE,
+        readonly = true,
+        showInFilter = false,
+        tooltip = "Tytuł książki — pobierany automatycznie na podstawie bookId",
+        tooltipKey = "tooltip.loan.bookTitle"
     )
-    @Enumerated(EnumType.STRING)
-    var status: LoanStatus = LoanStatus.ACTIVE
+    var bookTitle: String = ""
+
+    // ─── @Formula: imię i nazwisko czytelnika ────────────────────────────────
+    @Formula("(SELECT CONCAT(m.first_name, ' ', m.last_name) FROM member m WHERE m.id = member_id)")
+    @PortalField(
+        label = "Czytelnik (pełne imię)", labelKey = "field.loan.memberName",
+        order = 12,
+        renderer = RendererType.TEXT,
+        filterType = FilterType.NONE,
+        readonly = true,
+        showInFilter = false,
+        showInTable = false,
+        tooltip = "Imię i nazwisko czytelnika — pobierane automatycznie na podstawie memberId",
+        tooltipKey = "tooltip.loan.memberName"
+    )
+    var memberName: String = ""
 
     @Column(nullable = false)
     @PortalField(
-        label = "Data wypożyczenia",
+        label = "Status wypożyczenia", labelKey = "field.loan.status",
+        order = 4,
+        renderer = RendererType.SELECT, filterType = FilterType.IN,
+        selectEnum = _root_ide_package_.dev.acme.portal.entity.LoanStatus::class,
+        defaultValue = "ACTIVE"
+    )
+    @Enumerated(EnumType.STRING)
+    var status: dev.acme.portal.entity.LoanStatus = _root_ide_package_.dev.acme.portal.entity.LoanStatus.ACTIVE
+
+    @Column(nullable = false)
+    @PortalField(
+        label = "Data wypożyczenia", labelKey = "field.loan.loanDate",
         order = 5, required = true,
         renderer = RendererType.DATE, filterType = FilterType.RANGE,
-        tooltip = "Format: RRRR-MM-DD"
+        tooltip = "Format: RRRR-MM-DD",
+        tooltipKey = "tooltip.loan.loanDate"
     )
     var loanDate: String = ""
 
     @Column(nullable = false)
     @PortalField(
-        label = "Termin zwrotu",
+        label = "Termin zwrotu", labelKey = "field.loan.dueDate",
         order = 6, required = true,
         renderer = RendererType.DATE, filterType = FilterType.RANGE,
-        tooltip = "Planowana data zwrotu książki"
+        tooltip = "Planowana data zwrotu książki",
+        tooltipKey = "tooltip.loan.dueDate"
     )
     var dueDate: String = ""
 
     // returnDate widoczna TYLKO gdy status = RETURNED
     @Column
     @PortalField(
-        label = "Data faktycznego zwrotu",
+        label = "Data faktycznego zwrotu", labelKey = "field.loan.returnDate",
         order = 7,
         renderer = RendererType.DATE, filterType = FilterType.RANGE,
         showInTable = false,
-        tooltip = "Uzupełniana automatycznie podczas rejestracji zwrotu"
+        tooltip = "Uzupełniana automatycznie podczas rejestracji zwrotu",
+        tooltipKey = "tooltip.loan.returnDate"
     )
     @PortalDependency(
         field = "status",
@@ -274,11 +303,12 @@ class Loan {
 
     @Column(nullable = false)
     @PortalField(
-        label = "Liczba przedłużeń",
+        label = "Liczba przedłużeń", labelKey = "field.loan.renewalCount",
         order = 8,
         renderer = RendererType.NUMBER, filterType = FilterType.RANGE,
         readonly = true, min = 0.0, max = 3.0,
-        tooltip = "Maksymalnie 3 przedłużenia na jedno wypożyczenie"
+        tooltip = "Maksymalnie 3 przedłużenia na jedno wypożyczenie",
+        tooltipKey = "tooltip.loan.renewalCount"
     )
     // Ukryj licznik przedłużeń gdy wypożyczenie jest aktywne (nie ma sensu)
     @PortalDependency(
@@ -292,7 +322,7 @@ class Loan {
     // Pole uwag POJAWIAJĄCE się tylko gdy status = OVERDUE (clearOnHide = true)
     @Column(columnDefinition = "TEXT")
     @PortalField(
-        label = "Uwagi (przeterminowanie)",
+        label = "Uwagi (przeterminowanie)", labelKey = "field.loan.overdueNotes",
         order = 9,
         renderer = RendererType.TEXTAREA, filterType = FilterType.NONE,
         showInTable = false, showInFilter = false,
@@ -311,11 +341,12 @@ class Loan {
     // createdAt — DATETIME renderer (tylko do odczytu)
     @Column
     @PortalField(
-        label = "Utworzono",
+        label = "Utworzono", labelKey = "field.common.createdAt",
         order = 10,
         renderer = RendererType.DATETIME, filterType = FilterType.NONE,
         readonly = true, showInFilter = false,
-        tooltip = "Data i godzina założenia rekordu wypożyczenia"
+        tooltip = "Data i godzina założenia rekordu wypożyczenia",
+        tooltipKey = "tooltip.loan.createdAt"
     )
     var createdAt: String = ""
 }

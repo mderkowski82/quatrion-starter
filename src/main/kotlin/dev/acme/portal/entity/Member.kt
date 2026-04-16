@@ -1,10 +1,10 @@
-package com.example.portal.entity
+package dev.acme.portal.entity
 
 import dev.quatrion.portal.annotation.*
-import dev.quatrion.portal.model.ActionHandler
 import dev.quatrion.portal.model.ActionResult
 import dev.quatrion.portal.model.EntityData
 import io.quarkus.arc.Unremovable
+import io.quarkus.hibernate.reactive.panache.kotlin.PanacheEntityBase
 import jakarta.enterprise.context.ApplicationScoped
 import jakarta.persistence.*
 // ─── Enums ───────────────────────────────────────────────────────────────────
@@ -16,13 +16,14 @@ enum class MemberTag { VIP, REGULAR, STUDENT, SENIOR, STAFF }
 // ─── Zakładki formularza Czytelnika ──────────────────────────────────────────
 enum class MemberTab(
     override val label: String,
+    override val labelKey: String,
     override val icon: String,
     override val order: Int
 ) : PortalTab {
-    BASIC("Dane podstawowe", "user", 0),
-    CONTACT("Kontakt", "phone", 1),
-    MEMBERSHIP("Karta biblioteczna", "credit-card", 2),
-    LOANS("Historia wypożyczeń", "book-copy", 3)
+    BASIC("Dane podstawowe", "tab.basic", "user", 0),
+    CONTACT("Kontakt", "tab.contact", "phone", 1),
+    MEMBERSHIP("Karta biblioteczna", "tab.membership", "credit-card", 2),
+    LOANS("Historia wypożyczeń", "tab.loans", "book-copy", 3)
 }
 
 // ─── Modele formularzy akcji ─────────────────────────────────────────────────
@@ -59,56 +60,43 @@ data class SendWelcomeEmailForm(
 
 @ApplicationScoped
 @Unremovable
-class ActivateMemberHandler : ActionHandler<EntityData> {
-    override val actionName = "activate"
-
-    override suspend fun validate(entity: EntityData, formData: EntityData?): String? {
-        val isActive = entity["isActive"] as? Boolean ?: false
-        return if (isActive) "Czytelnik jest już aktywny" else null
+class ActivateMemberHandler {
+    suspend fun validate(entity: dev.acme.portal.entity.Member, formData: EntityData?): String? {
+        return if (entity.isActive) "Czytelnik jest już aktywny" else null
     }
 
-    override suspend fun execute(entity: EntityData, formData: EntityData?): ActionResult {
-        val id = entity["id"]
-        // logika: aktywacja konta czytelnika
-        return ActionResult.Success("Konto czytelnika #$id zostało aktywowane.", refreshTable = true)
+    suspend fun execute(entity: dev.acme.portal.entity.Member, formData: EntityData?): ActionResult {
+        return ActionResult.Success("Konto czytelnika #${entity.id} zostało aktywowane.", refreshTable = true)
     }
 }
 
 @ApplicationScoped
 @Unremovable
-class SendWelcomeEmailHandler : ActionHandler<EntityData> {
-    override val actionName = "sendWelcomeEmail"
-
-    override suspend fun validate(entity: EntityData, formData: EntityData?): String? {
-        val email = entity["email"] as? String
-        return if (email.isNullOrBlank()) "Czytelnik nie ma przypisanego adresu e-mail" else null
+class SendWelcomeEmailHandler {
+    suspend fun validate(entity: dev.acme.portal.entity.Member, formData: EntityData?): String? {
+        return if (entity.email.isBlank()) "Czytelnik nie ma przypisanego adresu e-mail" else null
     }
 
-    override suspend fun execute(entity: EntityData, formData: EntityData?): ActionResult {
+    suspend fun execute(entity: dev.acme.portal.entity.Member, formData: EntityData?): ActionResult {
         val subject = formData?.get("subject") as? String ?: ""
-        val email = entity["email"] as? String ?: ""
-        // logika: wysyłka wiadomości powitalnej
-        return ActionResult.Success("Wiadomość powitalna '$subject' wysłana na $email.")
+        return ActionResult.Success("Wiadomość powitalna '$subject' wysłana na ${entity.email}.")
     }
 }
 
 @ApplicationScoped
 @Unremovable
-class ExportMembersHandler : ActionHandler<EntityData> {
-    override val actionName = "exportMembers"
+class ExportMembersHandler {
+    suspend fun validate(entity: dev.acme.portal.entity.Member, formData: EntityData?) = null
 
-    override suspend fun validate(entity: EntityData, formData: EntityData?) = null
-
-    override suspend fun execute(entity: EntityData, formData: EntityData?): ActionResult {
-        val id = entity["id"]
-        val csvBytes = "id,name,email\n$id,...,...".toByteArray()
+    suspend fun execute(entity: dev.acme.portal.entity.Member, formData: EntityData?): ActionResult {
+        val csvBytes = "id,firstName,lastName,email\n${entity.id},${entity.firstName},${entity.lastName},${entity.email}".toByteArray()
         return ActionResult.Download("czytelnicy-eksport.csv", "text/csv", csvBytes)
     }
 
-    override suspend fun executeBulk(entities: List<EntityData>, formData: EntityData?): ActionResult {
+    suspend fun executeBulk(entities: List<dev.acme.portal.entity.Member>, formData: EntityData?): ActionResult {
         val header = "id,firstName,lastName,email,membershipType\n"
         val rows = entities.joinToString("\n") { e ->
-            "${e["id"]},${e["firstName"]},${e["lastName"]},${e["email"]},${e["membershipType"]}"
+            "${e.id},${e.firstName},${e.lastName},${e.email},${e.membershipType}"
         }
         val csvBytes = (header + rows).toByteArray()
         return ActionResult.Download(
@@ -128,15 +116,15 @@ class ExportMembersHandler : ActionHandler<EntityData> {
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Entity
-@Table(name = "member")
 @PortalEntity(
     label = "Czytelnik",
+    labelKey = "entity.member",
     module = "Library",
     group = "Użytkownicy",
+    groupKey = "group.users",
     icon = "users",
-    order = 4,
     description = "Zarejestrowani czytelnicy biblioteki — mogą wypożyczać książki",
-    tabs = MemberTab::class,
+    tabs = _root_ide_package_.dev.acme.portal.entity.MemberTab::class,
     softDelete = true,
     auditLog = true,
     pageSize = 25
@@ -150,8 +138,9 @@ class ExportMembersHandler : ActionHandler<EntityData> {
 @PortalAction(
     name = "activate",
     label = "Aktywuj konto",
+    labelKey = "action.member.activate",
     icon = "check-circle",
-    handler = ActivateMemberHandler::class,
+    handler = _root_ide_package_.dev.acme.portal.entity.ActivateMemberHandler::class,
     confirmMessage = "Czy aktywować konto tego czytelnika?",
     variant = "default",
     order = 1
@@ -159,26 +148,28 @@ class ExportMembersHandler : ActionHandler<EntityData> {
 @PortalAction(
     name = "sendWelcomeEmail",
     label = "Wyślij wiadomość powitalną",
+    labelKey = "action.member.sendWelcomeEmail",
     icon = "mail",
-    handler = SendWelcomeEmailHandler::class,
-    formModel = SendWelcomeEmailForm::class,
+    handler = _root_ide_package_.dev.acme.portal.entity.SendWelcomeEmailHandler::class,
+    formModel = _root_ide_package_.dev.acme.portal.entity.SendWelcomeEmailForm::class,
     variant = "outline",
     order = 2
 )
 @PortalAction(
     name = "exportMembers",
     label = "Eksportuj do CSV",
+    labelKey = "action.member.exportCsv",
     icon = "download",
-    handler = ExportMembersHandler::class,
+    handler = _root_ide_package_.dev.acme.portal.entity.ExportMembersHandler::class,
     bulkAllowed = true,
     variant = "secondary",
     order = 3
 )
-class Member {
+class Member: PanacheEntityBase {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @PortalField(label = "ID", tab = "BASIC", order = 0, readonly = true, showInFilter = false, width = 80)
+    @PortalField(label = "ID", labelKey = "field.common.id", tab = "BASIC", order = 0, readonly = true, showInFilter = false, width = 80)
     var id: Long = 0
 
     @Column(length = 80, nullable = false)
@@ -204,18 +195,18 @@ class Member {
     @Column(length = 20, nullable = false)
     @Enumerated(EnumType.STRING)
     @PortalField(
-        label = "Typ członkostwa",
+        label = "Typ członkostwa", labelKey = "field.member.membershipType",
         tab = "BASIC", order = 3,
         renderer = RendererType.SELECT, filterType = FilterType.IN,
-        selectEnum = MembershipType::class,
+        selectEnum = _root_ide_package_.dev.acme.portal.entity.MembershipType::class,
         defaultValue = "STANDARD",
         tooltip = "Typ karty bibliotecznej — wpływa na limity i uprawnienia"
     )
-    var membershipType: MembershipType = MembershipType.STANDARD
+    var membershipType: dev.acme.portal.entity.MembershipType = _root_ide_package_.dev.acme.portal.entity.MembershipType.STANDARD
 
     @Column(nullable = false)
     @PortalField(
-        label = "Konto aktywne",
+        label = "Konto aktywne", labelKey = "field.common.isActive",
         tab = "BASIC", order = 4,
         renderer = RendererType.BOOLEAN, filterType = FilterType.BOOLEAN,
         defaultValue = "true"
@@ -230,7 +221,8 @@ class Member {
         message = "Podaj poprawny adres e-mail"
     )
     @PortalField(
-        label = "E-mail", tab = "CONTACT", order = 1, required = true,
+        label = "E-mail", labelKey = "field.common.email",
+        tab = "CONTACT", order = 1, required = true,
         renderer = RendererType.EMAIL, filterType = FilterType.EXACT,
         placeholder = "czytelnik@example.com"
     )
@@ -242,7 +234,8 @@ class Member {
         message = "Numer telefonu może zawierać cyfry, spacje, myślniki i opcjonalny znak +"
     )
     @PortalField(
-        label = "Telefon", tab = "CONTACT", order = 2,
+        label = "Telefon", labelKey = "field.member.phone",
+        tab = "CONTACT", order = 2,
         renderer = RendererType.TEXT, filterType = FilterType.STARTS_WITH,
         placeholder = "+48 123 456 789",
         tooltip = "Numer kontaktowy (opcjonalny)"
@@ -251,7 +244,7 @@ class Member {
 
     @Column(length = 500)
     @PortalField(
-        label = "Zdjęcie profilowe",
+        label = "Zdjęcie profilowe", labelKey = "field.member.avatarUrl",
         tab = "CONTACT", order = 3,
         renderer = RendererType.FILE, filterType = FilterType.NONE,
         showInTable = false, showInFilter = false
@@ -260,7 +253,7 @@ class Member {
 
     @Column(length = 200)
     @PortalField(
-        label = "Hasło (hash)",
+        label = "Hasło (hash)", labelKey = "field.member.passwordHash",
         tab = "CONTACT", order = 4,
         renderer = RendererType.PASSWORD, filterType = FilterType.NONE,
         showInTable = false, showInFilter = false,
@@ -272,7 +265,7 @@ class Member {
 
     @Column
     @PortalField(
-        label = "Data rejestracji",
+        label = "Data rejestracji", labelKey = "field.member.registrationDate",
         tab = "MEMBERSHIP", order = 1,
         renderer = RendererType.DATE, filterType = FilterType.RANGE,
         readonly = true,
@@ -282,7 +275,7 @@ class Member {
 
     @Column
     @PortalField(
-        label = "Data ważności karty",
+        label = "Data ważności karty", labelKey = "field.member.expiryDate",
         tab = "MEMBERSHIP", order = 2,
         renderer = RendererType.DATE, filterType = FilterType.RANGE,
         tooltip = "Po tej dacie karta wymaga odnowienia"
@@ -291,7 +284,7 @@ class Member {
 
     @Column(nullable = false)
     @PortalField(
-        label = "Maks. liczba wypożyczeń jednocześnie",
+        label = "Maks. liczba wypożyczeń jednocześnie", labelKey = "field.member.maxLoans",
         tab = "MEMBERSHIP", order = 3,
         renderer = RendererType.NUMBER, filterType = FilterType.RANGE,
         min = 1.0, max = 50.0,
@@ -325,10 +318,10 @@ class Member {
 
     @Column
     @PortalField(
-        label = "Tagi czytelnika",
+        label = "Tagi czytelnika", labelKey = "field.member.tags",
         tab = "MEMBERSHIP", order = 4,
         renderer = RendererType.MULTI_SELECT, filterType = FilterType.IN,
-        selectEnum = MemberTag::class,
+        selectEnum = _root_ide_package_.dev.acme.portal.entity.MemberTag::class,
         showInTable = false,
         tooltip = "Kategorie czytelnika"
     )
@@ -351,7 +344,7 @@ class Member {
 
     @Column(columnDefinition = "TEXT")
     @PortalField(
-        label = "Uwagi bibliotekarza",
+        label = "Uwagi bibliotekarza", labelKey = "field.common.internalNotes",
         tab = "MEMBERSHIP", order = 5,
         renderer = RendererType.TEXTAREA, filterType = FilterType.NONE,
         showInTable = false, showInFilter = false,
@@ -371,7 +364,7 @@ class Member {
 
     @Transient
     @PortalField(
-        label = "Historia wypożyczeń",
+        label = "Historia wypożyczeń", labelKey = "field.member.loans",
         tab = "LOANS", order = 1,
         renderer = RendererType.RELATION_LIST,
         filterType = FilterType.NONE,
@@ -379,8 +372,9 @@ class Member {
         tooltip = "Lista wszystkich wypożyczeń powiązanych z tym czytelnikiem"
     )
     @PortalRelation(
+        targetEntity = _root_ide_package_.dev.acme.portal.entity.Loan::class,
         editable = false,
-        displayFields = ["bookId", "loanDate", "dueDate", "returnDate", "status"],
+        displayFields = ["bookTitle", "loanDate", "dueDate", "returnDate", "status"],
         searchFields = ["status"],
         cascadeDelete = true,
         orderBy = "loanDate DESC",
@@ -389,17 +383,15 @@ class Member {
     @PortalLookup(
         labelField = "status",
         valueField = "id",
-        filterQuery = "e.memberId = e.memberId",
+        parentField = "memberId",
         maxResults = 200
     )
-    var loans: List<Loan>? = null
+    var loans: List<dev.acme.portal.entity.Loan>? = null
 
-    // Wymagane dla softDelete = true w @PortalEntity
     @Column(nullable = false)
     @PortalField(label = "Usunięty", hidden = true)
     var deleted: Boolean = false
 }
-
 
 
 

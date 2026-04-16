@@ -1,11 +1,11 @@
 plugins {
-    kotlin("jvm") version "2.2.0"
-    kotlin("plugin.allopen") version "2.2.0"
-    id("io.quarkus") version "3.23.0"
+    kotlin("jvm") version "2.3.0"
+    kotlin("plugin.allopen") version "2.3.0"
+    id("io.quarkus") version "3.33.1"
 }
 
-group = "com.example"
-version = "0.0.1-RC4"
+group = "dev.quatrion"
+version = "0.0.3"
 
 repositories {
     mavenLocal()
@@ -14,12 +14,12 @@ repositories {
 
 dependencies {
     // Quatrion Portal framework (local build)
-    implementation(enforcedPlatform("dev.quatrion:quatrion-portal-bom:0.0.1-RC4"))
-    implementation("dev.quatrion:quatrion-portal-annotations:0.0.1-RC4")
-    implementation("dev.quatrion:quatrion-portal-runtime:0.0.1-RC4")
+    implementation(enforcedPlatform("dev.quatrion:quatrion-portal-bom:1.0.0-SNAPSHOT"))
+    implementation("dev.quatrion:quatrion-portal-annotations:1.0.0-SNAPSHOT")
+    implementation("dev.quatrion:quatrion-portal-runtime:1.0.0-SNAPSHOT")
 
     // Quarkus BOM
-    implementation(enforcedPlatform("io.quarkus.platform:quarkus-bom:3.23.0"))
+    implementation(enforcedPlatform("io.quarkus.platform:quarkus-bom:3.33.1"))
     implementation("io.quarkus:quarkus-kotlin")
     implementation("io.quarkus:quarkus-hibernate-reactive-panache-kotlin")
     implementation("io.quarkus:quarkus-reactive-pg-client")
@@ -38,10 +38,21 @@ dependencies {
     // Health checks
     implementation("io.quarkus:quarkus-smallrye-health")
 
+
+    // Amazon S3 (wymagane przez S3FileStorageService z quatrion-portal-runtime)
+    implementation(enforcedPlatform("io.quarkus.platform:quarkus-amazon-services-bom:3.33.1"))
+    implementation("io.quarkiverse.amazonservices:quarkus-amazon-s3")
+
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
+
     // Tests
     testImplementation("io.quarkus:quarkus-junit5")
     testImplementation("io.rest-assured:rest-assured")
     testImplementation("io.quarkus:quarkus-test-security")
+    testImplementation("io.quarkus:quarkus-junit5-mockito")
+    testImplementation("org.mockito.kotlin:mockito-kotlin:6.3.0")
+
+
 }
 
 java {

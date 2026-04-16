@@ -1,17 +1,19 @@
-package com.example.portal.entity
+package dev.acme.portal.entity
 
 import dev.quatrion.portal.annotation.*
+import io.quarkus.hibernate.reactive.panache.kotlin.PanacheEntityBase
 import jakarta.persistence.*
 
 // ─── Zakładki formularza Autora ──────────────────────────────────────────────
 enum class AuthorTab(
     override val label: String,
+    override val labelKey: String,
     override val icon: String,
     override val order: Int
 ) : PortalTab {
-    BASIC("Dane podstawowe", "user", 0),
-    CONTACT("Kontakt i media", "link", 1),
-    NOTES("Biografia", "file-text", 2)
+    BASIC("Dane podstawowe", "tab.basic", "user", 0),
+    CONTACT("Kontakt i media", "tab.contact", "link", 1),
+    NOTES("Biografia", "tab.notes", "file-text", 2)
 }
 
 // ─── Encja: Autor ────────────────────────────────────────────────────────────
@@ -21,23 +23,24 @@ enum class AuthorTab(
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Entity
-@Table(name = "author")
 @PortalEntity(
     label = "Autor",
+    labelKey = "entity.author",
     module = "Library",
     group = "Słowniki",
+    groupKey = "group.dictionaries",
     icon = "pen-line",
     order = 2,
     description = "Autorzy książek dostępnych w bibliotece",
-    tabs = AuthorTab::class,
+    tabs = _root_ide_package_.dev.acme.portal.entity.AuthorTab::class,
     auditLog = true,
     pageSize = 25
 )
-class Author {
+class Author: PanacheEntityBase {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @PortalField(label = "ID", tab = "BASIC", order = 0, readonly = true, showInFilter = false, width = 80)
+    @PortalField(label = "ID", labelKey = "field.common.id", tab = "BASIC", order = 0, readonly = true, showInFilter = false, width = 80)
     var id: Long = 0
 
     @Column(length = 80, nullable = false)
@@ -58,10 +61,9 @@ class Author {
     )
     var lastName: String = ""
 
-    // Pole wyliczane — displayExpression łączy imię i nazwisko
     @Transient
     @PortalField(
-        label = "Pełne imię i nazwisko",
+        label = "Pełne imię i nazwisko", labelKey = "field.author.fullName",
         tab = "BASIC", order = 3,
         displayExpression = "\${firstName} \${lastName}",
         readonly = true, showInFilter = false,
@@ -81,7 +83,8 @@ class Author {
 
     @Column(nullable = false)
     @PortalField(
-        label = "Aktywny", tab = "BASIC", order = 5,
+        label = "Aktywny", labelKey = "field.common.isActive",
+        tab = "BASIC", order = 5,
         renderer = RendererType.BOOLEAN, filterType = FilterType.BOOLEAN,
         defaultValue = "true"
     )
@@ -95,7 +98,8 @@ class Author {
         message = "Podaj poprawny adres e-mail"
     )
     @PortalField(
-        label = "E-mail", tab = "CONTACT", order = 1,
+        label = "E-mail", labelKey = "field.common.email",
+        tab = "CONTACT", order = 1,
         renderer = RendererType.EMAIL, filterType = FilterType.EXACT,
         placeholder = "autor@example.com",
         tooltip = "Adres e-mail do kontaktu z autorem"
@@ -104,7 +108,8 @@ class Author {
 
     @Column(length = 300)
     @PortalField(
-        label = "Strona internetowa", tab = "CONTACT", order = 2,
+        label = "Strona internetowa", labelKey = "field.author.website",
+        tab = "CONTACT", order = 2,
         renderer = RendererType.URL, filterType = FilterType.NONE,
         showInFilter = false, placeholder = "https://",
         tooltip = "Oficjalna strona lub profil autora"
@@ -113,7 +118,8 @@ class Author {
 
     @Column(length = 500)
     @PortalField(
-        label = "Zdjęcie (URL / ścieżka)", tab = "CONTACT", order = 3,
+        label = "Zdjęcie (URL / ścieżka)", labelKey = "field.author.photoUrl",
+        tab = "CONTACT", order = 3,
         renderer = RendererType.FILE, filterType = FilterType.NONE,
         showInTable = false, showInFilter = false,
         tooltip = "Zdjęcie profilowe autora"
@@ -124,7 +130,8 @@ class Author {
 
     @Column(columnDefinition = "TEXT")
     @PortalField(
-        label = "Biografia", tab = "NOTES", order = 1,
+        label = "Biografia", labelKey = "field.author.bio",
+        tab = "NOTES", order = 1,
         renderer = RendererType.TEXTAREA, filterType = FilterType.NONE,
         showInTable = false, showInFilter = false,
         placeholder = "Krótka notka biograficzna autora..."
@@ -133,7 +140,8 @@ class Author {
 
     @Column(columnDefinition = "TEXT")
     @PortalField(
-        label = "Notatki wewnętrzne", tab = "NOTES", order = 2,
+        label = "Notatki wewnętrzne", labelKey = "field.common.internalNotes",
+        tab = "NOTES", order = 2,
         renderer = RendererType.TEXTAREA, filterType = FilterType.NONE,
         showInTable = false, showInFilter = false,
         placeholder = "Uwagi tylko do wewnętrznego użytku...",
@@ -141,4 +149,3 @@ class Author {
     )
     var internalNotes: String = ""
 }
-

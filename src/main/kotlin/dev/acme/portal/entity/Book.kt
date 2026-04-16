@@ -1,9 +1,11 @@
-﻿package com.example.portal.entity
+﻿package dev.acme.portal.entity
+
 import dev.quatrion.portal.annotation.*
-import dev.quatrion.portal.model.ActionHandler
 import dev.quatrion.portal.model.ActionResult
 import dev.quatrion.portal.model.EntityData
 import io.quarkus.arc.Unremovable
+import io.quarkus.hibernate.reactive.panache.kotlin.PanacheEntity
+import io.quarkus.hibernate.reactive.panache.kotlin.PanacheEntityBase
 import jakarta.enterprise.context.ApplicationScoped
 import jakarta.persistence.*
 // ─── Enums ───────────────────────────────────────────────────────────────────
@@ -12,12 +14,13 @@ enum class BookTag { BESTSELLER, NEW_ARRIVAL, RECOMMENDED, CLASSIC, AWARD_WINNER
 // ─── Zakładki formularza Książki ─────────────────────────────────────────────
 enum class BookTab(
     override val label: String,
+    override val labelKey: String,
     override val icon: String,
     override val order: Int
 ) : PortalTab {
-    BASIC("Podstawowe", "book", 0),
-    DETAILS("Szczegóły", "info", 1),
-    RELATIONS("Powiązania", "link-2", 2)
+    BASIC("Podstawowe", "tab.basic", "book", 0),
+    DETAILS("Szczegóły", "tab.details", "info", 1),
+    RELATIONS("Powiązania", "tab.relations", "link-2", 2)
 }
 // ─── Modele formularzy akcji ─────────────────────────────────────────────────
 data class NotifyReadersForm(
@@ -47,41 +50,38 @@ data class NotifyReadersForm(
     val channel: String = "EMAIL"
 )
 // ─── Handlery akcji ──────────────────────────────────────────────────────────
+//  Plain CDI beans — no interface required.
+//  Methods are invoked via KClass.memberFunctions + callSuspend.
 @ApplicationScoped
 @Unremovable
-class ArchiveBookHandler : ActionHandler<EntityData> {
-    override val actionName = "archiveBook"
-    override suspend fun validate(entity: EntityData, formData: EntityData?): String? {
-        val status = entity["status"] as? String
-        return if (status == "ARCHIVED") "Książka jest już zarchiwizowana" else null
+class ArchiveBookHandler {
+    suspend fun validate(entity: dev.acme.portal.entity.Book, formData: EntityData?): String? {
+        return if (entity.status == _root_ide_package_.dev.acme.portal.entity.BookStatus.ARCHIVED) "Książka jest już zarchiwizowana" else null
     }
-    override suspend fun execute(entity: EntityData, formData: EntityData?): ActionResult {
-        val id = entity["id"]
-        return ActionResult.Success("Książka #$id została zarchiwizowana.", refreshTable = true)
-    }
-}
-@ApplicationScoped
-@Unremovable
-class ExportBookPdfHandler : ActionHandler<EntityData> {
-    override val actionName = "exportPdf"
-    override suspend fun validate(entity: EntityData, formData: EntityData?) = null
-    override suspend fun execute(entity: EntityData, formData: EntityData?): ActionResult {
-        val id = entity["id"]
-        val pdfBytes = "PDF book $id".toByteArray()
-        return ActionResult.Download("ksiazka-$id.pdf", "application/pdf", pdfBytes)
+    suspend fun execute(entity: dev.acme.portal.entity.Book, formData: EntityData?): ActionResult {
+        entity.status = _root_ide_package_.dev.acme.portal.entity.BookStatus.ARCHIVED
+        return ActionResult.Success("Książka #${entity.id} została zarchiwizowana.", refreshTable = true)
     }
 }
 @ApplicationScoped
 @Unremovable
-class NotifyReadersHandler : ActionHandler<EntityData> {
-    override val actionName = "notifyReaders"
-    override suspend fun validate(entity: EntityData, formData: EntityData?) = null
-    override suspend fun execute(entity: EntityData, formData: EntityData?): ActionResult {
+class ExportBookPdfHandler {
+    suspend fun validate(entity: dev.acme.portal.entity.Book, formData: EntityData?) = null
+    suspend fun execute(entity: dev.acme.portal.entity.Book, formData: EntityData?): ActionResult {
+        val pdfBytes = "PDF book ${entity.id}".toByteArray()
+        return ActionResult.Download("ksiazka-${entity.id}.pdf", "application/pdf", pdfBytes)
+    }
+}
+@ApplicationScoped
+@Unremovable
+class NotifyReadersHandler {
+    suspend fun validate(entity: dev.acme.portal.entity.Book, formData: EntityData?) = null
+    suspend fun execute(entity: dev.acme.portal.entity.Book, formData: EntityData?): ActionResult {
         val subject = formData?.get("subject") as? String ?: ""
         val channel = formData?.get("channel") as? String ?: "EMAIL"
         return ActionResult.Success("Powiadomienie '$subject' wyslane przez $channel.")
     }
-    override suspend fun executeBulk(entities: List<EntityData>, formData: EntityData?): ActionResult {
+    suspend fun executeBulk(entities: List<dev.acme.portal.entity.Book>, formData: EntityData?): ActionResult {
         val subject = formData?.get("subject") as? String ?: ""
         return ActionResult.Success(
             "Powiadomienie '$subject' wyslane dla ${entities.size} ksiazek.",
@@ -91,15 +91,16 @@ class NotifyReadersHandler : ActionHandler<EntityData> {
 }
 // ─── Encja: Książka ────────────────────────────────────────────────────────
 @Entity
-@Table(name = "book")
 @PortalEntity(
     label = "Książka",
+    labelKey = "entity.book",
     module = "Library",
     group = "Katalog",
+    groupKey = "group.catalog",
     icon = "book-open",
     order = 3,
     description = "Katalog wszystkich książek w bibliotece",
-    tabs = BookTab::class,
+    tabs = _root_ide_package_.dev.acme.portal.entity.BookTab::class,
     pageSize = 50,
     auditLog = true
 )
@@ -112,8 +113,9 @@ class NotifyReadersHandler : ActionHandler<EntityData> {
 @PortalAction(
     name = "archiveBook",
     label = "Archiwizuj",
+    labelKey = "action.book.archive",
     icon = "archive",
-    handler = ArchiveBookHandler::class,
+    handler = _root_ide_package_.dev.acme.portal.entity.ArchiveBookHandler::class,
     confirmMessage = "Czy na pewno zarchiwizowac te ksiazke?",
     variant = "destructive",
     order = 1
@@ -121,25 +123,27 @@ class NotifyReadersHandler : ActionHandler<EntityData> {
 @PortalAction(
     name = "exportPdf",
     label = "Eksportuj PDF",
+    labelKey = "action.book.exportPdf",
     icon = "file-down",
-    handler = ExportBookPdfHandler::class,
+    handler = _root_ide_package_.dev.acme.portal.entity.ExportBookPdfHandler::class,
     variant = "outline",
     order = 2
 )
 @PortalAction(
     name = "notifyReaders",
     label = "Powiadom czytelników",
+    labelKey = "action.book.notifyReaders",
     icon = "bell",
-    handler = NotifyReadersHandler::class,
-    formModel = NotifyReadersForm::class,
+    handler = _root_ide_package_.dev.acme.portal.entity.NotifyReadersHandler::class,
+    formModel = _root_ide_package_.dev.acme.portal.entity.NotifyReadersForm::class,
     bulkAllowed = true,
     variant = "secondary",
     order = 3
 )
-class Book {
+class Book: PanacheEntityBase {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @PortalField(label = "ID", tab = "BASIC", order = 0, readonly = true, showInFilter = false, width = 80)
+    @PortalField(label = "ID", labelKey = "field.common.id", tab = "BASIC", order = 0, readonly = true, showInFilter = false, width = 80)
     var id: Long = 0
     @Column(length = 20, unique = true, nullable = false)
     @Regex(
@@ -166,16 +170,16 @@ class Book {
     @Column(length = 20, nullable = false)
     @Enumerated(EnumType.STRING)
     @PortalField(
-        label = "Status",
+        label = "Status", labelKey = "field.book.status",
         tab = "BASIC", order = 3,
         renderer = RendererType.SELECT, filterType = FilterType.IN,
-        selectEnum = BookStatus::class,
+        selectEnum = _root_ide_package_.dev.acme.portal.entity.BookStatus::class,
         defaultValue = "AVAILABLE"
     )
-    var status: BookStatus = BookStatus.AVAILABLE
+    var status: dev.acme.portal.entity.BookStatus = _root_ide_package_.dev.acme.portal.entity.BookStatus.AVAILABLE
     @Column(nullable = false)
     @PortalField(
-        label = "Dostępna w wypożyczalni",
+        label = "Dostępna w wypożyczalni", labelKey = "field.common.isActive",
         tab = "BASIC", order = 4,
         renderer = RendererType.BOOLEAN, filterType = FilterType.BOOLEAN,
         defaultValue = "true"
@@ -183,7 +187,7 @@ class Book {
     var isActive: Boolean = true
     @Column(length = 7)
     @PortalField(
-        label = "Kolor okładki",
+        label = "Kolor okładki", labelKey = "field.book.coverColor",
         tab = "BASIC", order = 5,
         renderer = RendererType.COLOR, filterType = FilterType.NONE,
         showInFilter = false,
@@ -194,7 +198,7 @@ class Book {
     // ─── Zakładka DETAILS ────────────────────────────────────────────────────
     @Column(columnDefinition = "TEXT")
     @PortalField(
-        label = "Opis / streszczenie",
+        label = "Opis / streszczenie", labelKey = "field.common.description",
         tab = "DETAILS", order = 1,
         renderer = RendererType.TEXTAREA, filterType = FilterType.NONE,
         showInTable = false, showInFilter = false,
@@ -210,7 +214,7 @@ class Book {
     var description: String = ""
     @Column
     @PortalField(
-        label = "Liczba stron",
+        label = "Liczba stron", labelKey = "field.book.pageCount",
         tab = "DETAILS", order = 2,
         renderer = RendererType.NUMBER, filterType = FilterType.RANGE,
         min = 1.0, max = 9999.0,
@@ -219,7 +223,7 @@ class Book {
     var pageCount: Int = 0
     @Column(nullable = false)
     @PortalField(
-        label = "Cena wypożyczenia (zł/dzień)",
+        label = "Cena wypożyczenia (zł/dzień)", labelKey = "field.book.dailyPrice",
         tab = "DETAILS", order = 3,
         renderer = RendererType.DECIMAL, filterType = FilterType.RANGE,
         min = 0.0, max = 99.99,
@@ -236,7 +240,7 @@ class Book {
     var dailyPrice: Double = 0.0
     @Column
     @PortalField(
-        label = "Data wydania",
+        label = "Data wydania", labelKey = "field.book.publishedDate",
         tab = "DETAILS", order = 4,
         renderer = RendererType.DATE, filterType = FilterType.RANGE,
         showInTable = false,
@@ -245,10 +249,10 @@ class Book {
     var publishedDate: String = ""
     @Column
     @PortalField(
-        label = "Tagi",
+        label = "Tagi", labelKey = "field.book.tags",
         tab = "DETAILS", order = 5,
         renderer = RendererType.MULTI_SELECT, filterType = FilterType.IN,
-        selectEnum = BookTag::class,
+        selectEnum = _root_ide_package_.dev.acme.portal.entity.BookTag::class,
         showInTable = false,
         tooltip = "Możesz wybrać kilka tagów jednocześnie"
     )
@@ -262,7 +266,7 @@ class Book {
     var tags: String = ""
     @Column(columnDefinition = "TEXT")
     @PortalField(
-        label = "Metadane (JSON)",
+        label = "Metadane (JSON)", labelKey = "field.book.metadata",
         tab = "DETAILS", order = 6,
         renderer = RendererType.JSON, filterType = FilterType.NONE,
         showInTable = false, showInFilter = false,
@@ -272,14 +276,14 @@ class Book {
     // ─── Zakładka RELATIONS ──────────────────────────────────────────────────
     @Column
     @PortalField(
-        label = "Autor",
+        label = "Autor", labelKey = "field.book.authorId",
         tab = "RELATIONS", order = 1,
         renderer = RendererType.RELATION, filterType = FilterType.EXACT,
         required = true,
         tooltip = "Autor lub współautor książki"
     )
     @PortalRelation(
-        targetEntity = Author::class,
+        targetEntity = _root_ide_package_.dev.acme.portal.entity.Author::class,
         editable = true,
         displayFields = ["firstName", "lastName", "email"],
         searchFields = ["firstName", "lastName"],
@@ -294,13 +298,13 @@ class Book {
     var authorId: Long? = null
     @Column
     @PortalField(
-        label = "Gatunek",
+        label = "Gatunek", labelKey = "field.book.genreId",
         tab = "RELATIONS", order = 2,
         renderer = RendererType.RELATION, filterType = FilterType.EXACT,
         tooltip = "Gatunek literacki z aktywnego słownika"
     )
     @PortalRelation(
-        targetEntity = Genre::class,
+        targetEntity = _root_ide_package_.dev.acme.portal.entity.Genre::class,
         editable = true,
         displayFields = ["name", "abbreviation"],
         searchFields = ["name", "abbreviation"],

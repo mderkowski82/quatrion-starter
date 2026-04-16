@@ -1,0 +1,24 @@
+{
+  "name": "quatrion-starter",
+  "version": "1.0.0",
+  "description": "> ⚠️ **ALPHA VERSION** — This project is under active development. The annotation API and interfaces may change without backward compatibility. Not recommended for production use.",
+  "main": "playwright-explore.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mderkowski82/quatrion-starter.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/mderkowski82/quatrion-starter/issues"
+  },
+  "homepage": "https://github.com/mderkowski82/quatrion-starter#readme",
+  "dependencies": {
+    "playwright": "^1.59.1"
+  }
+}
