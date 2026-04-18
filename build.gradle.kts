@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "dev.quatrion"
-version = "0.0.3"
+version = "0.0.3-RC1"
 
 repositories {
     mavenLocal()
@@ -14,9 +14,9 @@ repositories {
 
 dependencies {
     // Quatrion Portal framework (local build)
-    implementation(enforcedPlatform("dev.quatrion:quatrion-portal-bom:1.0.0-SNAPSHOT"))
-    implementation("dev.quatrion:quatrion-portal-annotations:1.0.0-SNAPSHOT")
-    implementation("dev.quatrion:quatrion-portal-runtime:1.0.0-SNAPSHOT")
+    implementation(enforcedPlatform("dev.quatrion:quatrion-portal-bom:${version}"))
+    implementation("dev.quatrion:quatrion-portal-annotations:${version}")
+    implementation("dev.quatrion:quatrion-portal-runtime:${version}")
 
     // Quarkus BOM
     implementation(enforcedPlatform("io.quarkus.platform:quarkus-bom:3.33.1"))
