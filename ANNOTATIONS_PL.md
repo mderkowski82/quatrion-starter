@@ -22,6 +22,10 @@
 10. [Rejestracja encji w PortalModuleConfig](#10-rejestracja-encji-w-portalmoduleconfig)
 11. [Kompletny przykład — encja Klient](#11-kompletny-przykład--encja-klient)
 12. [Najczęstsze wzorce i FAQ](#12-najczęstsze-wzorce-i-faq)
+13. [RowColor — kolorowanie wierszy tabeli](#13-rowcolor--kolorowanie-wierszy-tabeli)
+14. [Konfiguracja portal.ui — application.properties](#14-konfiguracja-portalui--applicationproperties)
+15. [Pełna lista endpointów REST API](#15-pełna-lista-endpointów-rest-api)
+16. [Szybka referencja adnotacji](#16-szybka-referencja-adnotacji)
 
 ---
 
@@ -61,11 +65,14 @@ Adnotacja **klasy** — rejestruje encję JPA w portalu i konfiguruje jej wyglą
 @Retention(AnnotationRetention.RUNTIME)
 annotation class PortalEntity(
     val label: String,
+    val labelKey: String = "",          // klucz i18n, np. "entity.customer"
     val module: String,
     val group: String = "",
+    val groupKey: String = "",          // klucz i18n nagłówka grupy
     val icon: String = "table",
     val order: Int = 0,
     val description: String = "",
+    val descriptionKey: String = "",    // klucz i18n opisu
     val tabs: KClass<out PortalTab> = NoTabs::class,
     val allowCreate: Boolean = true,
     val allowDelete: Boolean = true,
@@ -76,16 +83,22 @@ annotation class PortalEntity(
 )
 ```
 
+> **`NoTabs`** — wewnętrzna klasa-sentinel frameworka (pakiet `dev.quatrion.portal.annotation`).
+> Reprezentuje płaski formularz bez zakładek. Nie trzeba jej importować ręcznie.
+
 ### Parametry
 
 | Parametr | Typ | Domyślna | Opis |
 |---|---|---|---|
 | `label` | `String` | — | Nazwa wyświetlana w pasku bocznym, nagłówkach i okruszkach chleba |
+| `labelKey` | `String` | `""` | Klucz i18n dla `label`, np. `"entity.customer"`. Gdy niepuste, zastępuje `label` w UI |
 | `module` | `String` | — | Nazwa modułu (musi odpowiadać `ModuleDef.name` w konfiguracji) |
 | `group` | `String` | `""` | Opcjonalna grupa w nawigacji modułu — encje z tą samą grupą są zwinięte pod nagłówkiem |
+| `groupKey` | `String` | `""` | Klucz i18n dla nagłówka grupy, np. `"group.catalog"` |
 | `icon` | `String` | `"table"` | Nazwa ikony Lucide (np. `"users"`, `"package"`, `"shopping-cart"`) |
 | `order` | `Int` | `0` | Pozycja sortowania wewnątrz grupy/modułu — niższe wartości pierwsze |
 | `description` | `String` | `""` | Dłuższy opis pokazywany np. jako podtytuł strony |
+| `descriptionKey` | `String` | `""` | Klucz i18n dla `description`, np. `"entity.customer.description"` |
 | `tabs` | `KClass<out PortalTab>` | `NoTabs::class` | Enum implementujący `PortalTab` definiujący zakładki formularza |
 | `allowCreate` | `Boolean` | `true` | Czy portal pokazuje przycisk "Utwórz" |
 | `allowDelete` | `Boolean` | `true` | Czy portal pokazuje akcję "Usuń" |
@@ -167,6 +180,7 @@ class AuditLog { ... }
 ```kotlin
 interface PortalTab {
     val label: String
+    val labelKey: String get() = ""     // klucz i18n dla etykiety zakładki
     val icon: String get() = ""
     val order: Int get() = 0
 }
@@ -214,7 +228,7 @@ Adnotacja **pola lub funkcji** — deklaruje właściwość encji jako pole UI w
 @Retention(AnnotationRetention.RUNTIME)
 annotation class PortalField(
     val label: String,
-    val labelKey: String = "",
+    val labelKey: String = "",          // klucz i18n, np. "field.customer.name"
     val tab: String = "",
     val renderer: RendererType = RendererType.AUTO,
     val order: Int = 0,
@@ -225,6 +239,7 @@ annotation class PortalField(
     val required: Boolean = false,
     val placeholder: String = "",
     val tooltip: String = "",
+    val tooltipKey: String = "",        // klucz i18n dla tooltip
     val width: Int = 0,
     val group: String = "",
     val displayExpression: String = "",
@@ -237,12 +252,18 @@ annotation class PortalField(
 )
 ```
 
+> **`selectEnum` — jak wyznaczane są wartości opcji:**
+> Gdy ustawione, opcje SELECT/MULTI_SELECT są budowane z wywołania `.toString()` na każdej stałej enum.
+> Jeśli enum **nie nadpisuje** `toString()`, wartością jest nazwa stałej (np. `"VIP"`).
+> Jeśli enum nadpisuje `toString()` (np. `override fun toString() = label`), wartością jest wynik tej metody.
+> **Wartość używana w `@PortalDependency.value` musi odpowiadać temu samemu wywołaniu `toString()`.**
+
 ### Parametry
 
 | Parametr | Typ | Domyślna | Opis |
 |---|---|---|---|
 | `label` | `String` | — | Etykieta kolumny/pola w UI |
-| `labelKey` | `String` | `""` | Klucz i18n, np. `"field.customer.name"` |
+| `labelKey` | `String` | `""` | Klucz i18n dla `label`, np. `"field.customer.name"` |
 | `tab` | `String` | `""` | Nazwa stałej enum `PortalTab` (np. `"BASIC"`) |
 | `renderer` | `RendererType` | `AUTO` | Typ komponentu UI do renderowania wartości |
 | `order` | `Int` | `0` | Pozycja sortowania w zakładce/grupie |
@@ -253,12 +274,13 @@ annotation class PortalField(
 | `required` | `Boolean` | `false` | Walidacja: pole obowiązkowe przed zapisem |
 | `placeholder` | `String` | `""` | Tekst placeholder w pustym polu input |
 | `tooltip` | `String` | `""` | Krótka pomoc kontekstowa wyświetlana przy polu |
+| `tooltipKey` | `String` | `""` | Klucz i18n dla `tooltip`, np. `"tooltip.customer.email"` |
 | `width` | `Int` | `0` | Preferowana szerokość kolumny w pikselach (`0` = automatyczna) |
 | `group` | `String` | `""` | Grupuje pola wewnątrz zakładki wizualnie |
 | `displayExpression` | `String` | `""` | Wyrażenie szablonowe `${fieldName}` do obliczania wartości wyświetlanych |
 | `filterType` | `FilterType` | `AUTO` | Strategia filtrowania w panelu filtrów |
 | `selectOptions` | `Array<String>` | `[]` | Lista opcji dla `SELECT`/`MULTI_SELECT` (gdy `selectEnum` nie jest ustawione) |
-| `selectEnum` | `KClass<*>` | `Unit::class` | Enum, którego stałe definiują opcje `SELECT`/`MULTI_SELECT` |
+| `selectEnum` | `KClass<*>` | `Unit::class` | Enum, którego stałe definiują opcje — wartością jest `toString()` każdej stałej |
 | `min` | `Double` | `NaN` | Minimalna wartość dla pól `NUMBER`/`DECIMAL` |
 | `max` | `Double` | `NaN` | Maksymalna wartość dla pól `NUMBER`/`DECIMAL` |
 | `defaultValue` | `String` | `""` | Domyślna wartość przy tworzeniu nowego rekordu |
@@ -560,7 +582,9 @@ annotation class PortalRelation(
     val createAllowed: Boolean = false,
     val cascadeDelete: Boolean = false,
     val orderBy: String = "",
-    val maxItems: Int = 0
+    val maxItems: Int = 0,
+    val downloadAction: String = "",
+    val actions: Array<RelationRowAction> = []
 )
 ```
 
@@ -711,7 +735,8 @@ annotation class PortalLookup(
     val valueField: String = "id",
     val filterQuery: String = "",
     val dependsOn: String = "",
-    val maxResults: Int = 100
+    val maxResults: Int = 100,
+    val parentField: String = ""
 )
 ```
 
@@ -863,6 +888,34 @@ Zwraca listę `LookupOption`:
 | `cascadeDelete` | `Boolean` | `false` | Informacyjny: czy usuwanie rodzica kaskaduje na dzieci |
 | `orderBy` | `String` | `""` | Fragment HQL `ORDER BY` (bez słowa kluczowego), alias `e` |
 | `maxItems` | `Int` | `0` | Limit elementów w `RELATION_LIST` (0 = bez limitu) |
+| `downloadAction` | `String` | `""` | Nazwa `@PortalAction` na encji docelowej wywołującej pobieranie pliku. Gdy niepuste, renderowany jest przycisk ikony pobierania przy każdym wierszu `RELATION_LIST` |
+| `actions` | `Array<RelationRowAction>` | `[]` | Przyciski akcji per-wiersz w tabeli `RELATION_LIST` (patrz `RelationRowAction`) |
+
+#### `RelationRowAction` — predefiniowane akcje per-wiersz
+
+```kotlin
+enum class RelationRowAction(val actionName: String) {
+    DOWNLOAD("download")  // wywołuje akcję "download" na encji docelowej
+}
+```
+
+| Wartość | Nazwa akcji | Opis |
+|---|---|---|
+| `DOWNLOAD` | `"download"` | Wywołuje akcję `@PortalAction(name = "download")` na encji docelowej i wyzwala pobieranie pliku w przeglądarce |
+
+**Przykład — lista plików z przyciskiem pobierania:**
+```kotlin
+@jakarta.persistence.Transient
+@PortalField(label = "Pliki", renderer = RendererType.RELATION_LIST, showInFilter = false, showInTable = false)
+@PortalRelation(
+    targetEntity = TaskRunFile::class,
+    editable = false,
+    displayFields = ["fileName", "fileSize"],
+    actions = [RelationRowAction.DOWNLOAD]   // przycisk pobierania przy każdym pliku
+)
+@PortalLookup(labelField = "fileName", valueField = "id", parentField = "taskRunId")
+var files: List<TaskRunFile>? = null
+```
 
 #### `@PortalLookup`
 
@@ -873,6 +926,7 @@ Zwraca listę `LookupOption`:
 | `filterQuery` | `String` | `""` | Stały filtr HQL WHERE (alias `e.`), np. `"e.isActive = true"` |
 | `dependsOn` | `String` | `""` | Nazwa pola tego samego formularza — kaskadowy dropdown |
 | `maxResults` | `Int` | `100` | Maks. liczba opcji zwracanych przez `/lookup` |
+| `parentField` | `String` | `""` | Tylko `RELATION_LIST`: nazwa pola w encji **docelowej**, które przechowuje FK do rodzica (np. `"memberId"` w `Loan` gdy lista jest na `Member`). Gdy ustawione, frontend automatycznie pobiera powiązane rekordy przez `GET /api/portal/data/{targetEntity}?filter[parentField][eq]={parentId}` zamiast polegać na odpowiedzi `getById` |
 
 ---
 
@@ -1165,6 +1219,7 @@ annotation class PortalDependency(
 
 | Wartość | Wire value | Opis |
 |---|---|---|
+| `UNSPECIFIED` | `""` | Wartość domyślna — brak operatora liściowego. Używana gdy warunek jest podany jako JSON w `condition` |
 | `EQ` | `"eq"` | Równość |
 | `NEQ` | `"neq"` | Nierówność |
 | `IN` | `"in"` | Wartość w zbiorze |
@@ -1177,6 +1232,10 @@ annotation class PortalDependency(
 | `GTE` | `"gte"` | Większe lub równe |
 | `LT` | `"lt"` | Mniejsze niż |
 | `LTE` | `"lte"` | Mniejsze lub równe |
+
+> **`UNSPECIFIED`** — gdy używasz parametru `condition` (JSON AST) zamiast `field`/`operator`/`value`,
+> pozostaw `operator` na domyślnym `UNSPECIFIED`. Framework wykrywa ten tryb i nie stosuje żadnego
+> operatora liściowego — parsuje warunek z JSON.
 
 ### Przykłady
 
@@ -1317,10 +1376,12 @@ Adnotacja **klasy** (powtarzalna) — deklaruje niestandardowy przycisk akcji na
 annotation class PortalAction(
     val name: String,
     val label: String,
+    val labelKey: String = "",           // klucz i18n dla etykiety przycisku
     val icon: String = "play",
     val handler: KClass<*>,
     val formModel: KClass<*> = Void::class,
     val confirmMessage: String = "",
+    val confirmMessageKey: String = "",  // klucz i18n dla komunikatu potwierdzenia
     val bulkAllowed: Boolean = false,
     val order: Int = 0,
     val variant: String = "default"
@@ -1331,45 +1392,49 @@ annotation class PortalAction(
 |---|---|---|---|
 | `name` | `String` | — | Unikalny identyfikator akcji w encji, używany jako segment URL |
 | `label` | `String` | — | Etykieta przycisku w UI |
+| `labelKey` | `String` | `""` | Klucz i18n dla `label`, np. `"action.activate"` |
 | `icon` | `String` | `"play"` | Nazwa ikony Lucide na przycisku |
-| `handler` | `KClass<*>` | — | Klasa implementująca `ActionHandler` — musi być benem CDI |
+| `handler` | `KClass<*>` | — | Klasa handlera — musi być benem CDI `@ApplicationScoped @Unremovable` |
 | `formModel` | `KClass<*>` | `Void::class` | Opcjonalna data class jako model formularza wejściowego. Gdy ustawiona, UI pokazuje modal przed wykonaniem akcji |
 | `confirmMessage` | `String` | `""` | Komunikat potwierdzenia przed wykonaniem. Puste = brak potwierdzenia |
+| `confirmMessageKey` | `String` | `""` | Klucz i18n dla `confirmMessage` |
 | `bulkAllowed` | `Boolean` | `false` | Czy akcja może być wykonana na wielu zaznaczonych wierszach jednocześnie |
 | `order` | `Int` | `0` | Pozycja sortowania na pasku akcji |
 | `variant` | `String` | `"default"` | Styl wizualny przycisku: `"default"`, `"destructive"`, `"outline"`, `"secondary"`, `"ghost"` |
 
-### Implementacja `ActionHandler`
+### Implementacja handlera akcji
+
+> **Ważne:** `ActionHandler` **nie jest interfejsem**. Handlery to zwykłe beny CDI wykrywane przez refleksję Kotlin.
+> Framework wyszukuje metody `validate`, `execute` i opcjonalnie `executeBulk` z odpowiednimi sygnaturami.
 
 Handler **musi** być benem CDI `@ApplicationScoped @Unremovable`:
 
 ```kotlin
-import dev.quatrion.portal.model.ActionHandler
 import dev.quatrion.portal.model.ActionResult
 import dev.quatrion.portal.model.EntityData
 import jakarta.enterprise.context.ApplicationScoped
-import org.eclipse.microprofile.config.inject.ConfigProperty
 
 @ApplicationScoped
 @io.quarkus.arc.Unremovable
-class ActivateCustomerHandler : ActionHandler<EntityData> {
+class ActivateCustomerHandler {
 
-    override val actionName = "activate"
+    val actionName = "activate"
 
-    override suspend fun validate(entity: EntityData, formData: EntityData?): String? {
+    suspend fun validate(entity: EntityData, formData: EntityData?): String? {
         // Zwróć komunikat błędu lub null jeśli OK
         val isActive = entity["isActive"] as? Boolean ?: false
         return if (isActive) "Klient jest już aktywny" else null
     }
 
-    override suspend fun execute(entity: EntityData, formData: EntityData?): ActionResult {
+    suspend fun execute(entity: EntityData, formData: EntityData?): ActionResult {
+        // ✅ Po prostu zmień pola encji — framework auto-merguje po execute()
+        // ❌ NIE wywołuj entity.persist() / merge() — spowoduje błąd sesji
         val id = entity["id"]
-        // logika biznesowa...
         return ActionResult.Success("Klient $id aktywowany.", refreshTable = true)
     }
 
     // Opcjonalna implementacja masowa
-    override suspend fun executeBulk(
+    suspend fun executeBulk(
         entities: List<EntityData>,
         formData: EntityData?
     ): ActionResult {
@@ -1378,14 +1443,42 @@ class ActivateCustomerHandler : ActionHandler<EntityData> {
 }
 ```
 
+**`EntityData`** — klasa reprezentująca dane encji jako nazwane pola. Zachowuje się jak mapa, serializowana przez Jackson jako płaski obiekt JSON:
+
+```kotlin
+// Odczyt pól
+val name = entity["name"] as? String ?: "Unknown"
+val id   = entity["id"]
+val isOk = "status" in entity  // sprawdzenie istnienia klucza
+```
+
 **`ActionResult` — możliwe wyniki:**
+
+```kotlin
+// Link nawigacyjny pokazywany po sukcesie
+data class ResultLink(
+    val label: String,
+    val entityName: String,
+    val module: String,
+    val entityId: Long
+)
+```
 
 | Typ | Opis |
 |---|---|
-| `ActionResult.Success(message, data?, refreshTable)` | Sukces — opcjonalnie odświeża tabelę |
+| `ActionResult.Success(message, data?, refreshTable, links)` | Sukces. `refreshTable` domyślnie **`true`** — odświeża tabelę. `links` — opcjonalne przyciski nawigacyjne |
 | `ActionResult.Error(message, details?)` | Błąd z opcjonalną mapą szczegółów pól |
 | `ActionResult.Redirect(url)` | Przekierowanie na podany URL |
 | `ActionResult.Download(fileName, contentType, data)` | Pobranie pliku |
+
+```kotlin
+// Sukces z linkiem nawigacyjnym do powiązanego rekordu
+return ActionResult.Success(
+    message = "Uruchomiono zadanie.",
+    refreshTable = true,
+    links = listOf(ResultLink("Przejdź do TaskRun", "TaskRun", "System", taskRunId))
+)
+```
 
 ### `@PortalFormField`
 
@@ -1398,6 +1491,7 @@ Adnotacja **pola** data class — opisuje jedno pole w formularzu wejściowym ak
 @Retention(AnnotationRetention.RUNTIME)
 annotation class PortalFormField(
     val label: String,
+    val labelKey: String = "",           // klucz i18n dla etykiety pola
     val renderer: RendererType = RendererType.TEXT,
     val required: Boolean = false,
     val placeholder: String = "",
@@ -1444,16 +1538,16 @@ data class ProcessOrderForm(
 ```kotlin
 @ApplicationScoped
 @io.quarkus.arc.Unremovable
-class ProcessOrderHandler : ActionHandler<EntityData> {
+class ProcessOrderHandler {
 
-    override val actionName = "processOrder"
+    val actionName = "processOrder"
 
-    override suspend fun validate(entity: EntityData, formData: EntityData?): String? {
+    suspend fun validate(entity: EntityData, formData: EntityData?): String? {
         val status = entity["status"] as? String
         return if (status == "CANCELLED") "Nie można przetworzyć anulowanego zamówienia" else null
     }
 
-    override suspend fun execute(entity: EntityData, formData: EntityData?): ActionResult {
+    suspend fun execute(entity: EntityData, formData: EntityData?): ActionResult {
         val priority = formData?.get("priority") as? String ?: "NORMAL"
         val notes = formData?.get("notes") as? String ?: ""
         val orderId = entity["id"]
@@ -1511,10 +1605,10 @@ class Order { ... }
 ```kotlin
 @ApplicationScoped
 @io.quarkus.arc.Unremovable
-class ExportInvoiceHandler : ActionHandler<EntityData> {
-    override val actionName = "exportPdf"
-    override suspend fun validate(entity: EntityData, formData: EntityData?) = null
-    override suspend fun execute(entity: EntityData, formData: EntityData?): ActionResult {
+class ExportInvoiceHandler {
+    val actionName = "exportPdf"
+    suspend fun validate(entity: EntityData, formData: EntityData?) = null
+    suspend fun execute(entity: EntityData, formData: EntityData?): ActionResult {
         val pdfBytes = generatePdf(entity)
         return ActionResult.Download("faktura-${entity["id"]}.pdf", "application/pdf", pdfBytes)
     }
@@ -1534,7 +1628,9 @@ annotation class PortalSecurity(
     val viewRoles: Array<String> = [],
     val editRoles: Array<String> = [],
     val deleteRoles: Array<String> = [],
-    val actionRoles: Array<String> = []
+    val actionRoles: Array<String> = [],
+    val ownerField: String = "",
+    val ownerRoles: Array<String> = []
 )
 ```
 
@@ -1544,6 +1640,13 @@ annotation class PortalSecurity(
 | `editRoles` | `Array<String>` | Role uprawnione do tworzenia i aktualizacji rekordów |
 | `deleteRoles` | `Array<String>` | Role uprawnione do usuwania rekordów |
 | `actionRoles` | `Array<String>` | Role uprawnione do wykonywania `@PortalAction` na encji |
+| `ownerField` | `String` | Nazwa pola encji przechowującego `sub` z JWT właściciela rekordu (np. `"createdBySub"`). Gdy ustawione, włącza **filtrowanie na poziomie wiersza** dla ról w `ownerRoles` |
+| `ownerRoles` | `Array<String>` | Role ograniczone do własnych rekordów (przez `ownerField`). Użytkownicy **poza** tą listą widzą wszystkie rekordy |
+
+> **Bezpieczeństwo na poziomie wiersza (`ownerField` + `ownerRoles`):**
+> - **Listowanie/eksport**: użytkownicy z rolą w `ownerRoles` widzą tylko rekordy, gdzie `ownerField == JWT.sub`
+> - **Tworzenie**: pole `ownerField` jest automatycznie ustawiane na `JWT.sub`
+> - **Aktualizacja/usuwanie**: użytkownicy z rolą w `ownerRoles` mogą modyfikować tylko własne rekordy
 
 > Nazwy ról muszą odpowiadać wartościom w tokenie JWT/OIDC skonfigurowanym przez `PortalUiConfig.SecurityConfig.rolesAttribute`.
 
@@ -1588,6 +1691,26 @@ class AuditLog { ... }
 class SystemConfig { ... }
 ```
 
+**Bezpieczeństwo na poziomie wiersza (sprzedawca widzi tylko swoje rekordy):**
+```kotlin
+@PortalSecurity(
+    viewRoles = ["sales", "manager", "admin"],
+    editRoles = ["sales", "manager", "admin"],
+    deleteRoles = ["manager", "admin"],
+    actionRoles = ["manager", "admin"],
+    ownerField = "createdBySub",   // pole w encji, gdzie jest JWT.sub właściciela
+    ownerRoles = ["sales"]         // rola "sales" widzi tylko własne rekordy
+)
+@PortalEntity(label = "Leady sprzedażowe", module = "CRM")
+@Entity
+class SalesLead {
+    @Column(length = 100)
+    @PortalField(label = "Właściciel (sub)", hidden = true)
+    var createdBySub: String = ""  // automatycznie ustawiane z JWT przy tworzeniu
+    // ...
+}
+```
+
 ---
 
 ## 10. Rejestracja encji w `PortalModuleConfig`
@@ -1623,6 +1746,7 @@ class MyModuleConfig : PortalModuleConfig() {
 |---|---|---|---|
 | `name` | `String` | — | Identyfikator modułu (musi pasować do `@PortalEntity.module`) |
 | `label` | `String` | — | Wyświetlana nazwa modułu w nawigacji |
+| `labelKey` | `String` | `""` | Klucz i18n dla `label`, np. `"module.crm"` |
 | `icon` | `String` | `"folder"` | Ikona Lucide modułu |
 | `order` | `Int` | `0` | Pozycja sortowania modułu |
 | `defaultEntity` | `Class<*>` | — | Encja otwierana po kliknięciu modułu |
@@ -1723,26 +1847,26 @@ data class SendEmailForm(
 // ─── Handlery akcji ─────────────────────────────────────────────────────────
 @ApplicationScoped
 @io.quarkus.arc.Unremovable
-class ActivateCustomerHandler : ActionHandler<EntityData> {
-    override val actionName = "activate"
-    override suspend fun validate(entity: EntityData, formData: EntityData?) =
+class ActivateCustomerHandler {
+    val actionName = "activate"
+    suspend fun validate(entity: EntityData, formData: EntityData?) =
         if (entity["isActive"] as? Boolean == true) "Klient już aktywny" else null
-    override suspend fun execute(entity: EntityData, formData: EntityData?) =
+    suspend fun execute(entity: EntityData, formData: EntityData?) =
         ActionResult.Success("Klient aktywowany.", refreshTable = true)
 }
 
 @ApplicationScoped
 @io.quarkus.arc.Unremovable
-class SendEmailHandler : ActionHandler<EntityData> {
-    override val actionName = "sendEmail"
-    override suspend fun validate(entity: EntityData, formData: EntityData?) = null
-    override suspend fun execute(entity: EntityData, formData: EntityData?): ActionResult {
+class SendEmailHandler {
+    val actionName = "sendEmail"
+    suspend fun validate(entity: EntityData, formData: EntityData?) = null
+    suspend fun execute(entity: EntityData, formData: EntityData?): ActionResult {
         val subject = formData?.get("subject") as? String ?: ""
         val email = entity["email"] as? String ?: ""
         // logika wysyłki...
         return ActionResult.Success("E-mail '$subject' wysłany na $email.")
     }
-    override suspend fun executeBulk(entities: List<EntityData>, formData: EntityData?) =
+    suspend fun executeBulk(entities: List<EntityData>, formData: EntityData?) =
         ActionResult.Success("E-mail wysłany do ${entities.size} klientów.")
 }
 
@@ -2040,4 +2164,214 @@ Zalecana kolejność (dla czytelności):
 var fieldName: Type = defaultValue
 ```
 
+---
 
+## 13. `RowColor` — kolorowanie wierszy tabeli
+
+Encje mogą implementować interfejs `RowColorProvider` aby sterować kolorem tła wiersza w tabeli portalu. Framework automatycznie dołącza kolor do danych encji jako pole `_rowColor`.
+
+```kotlin
+enum class RowColor {
+    NONE, SUCCESS, WARNING, DANGER, INFO, MUTED
+}
+
+interface RowColorProvider {
+    fun currentStatus(): RowColor?
+}
+```
+
+### Mapowanie kolorów na klasy CSS
+
+| Wartość | Kolor | Klasa CSS |
+|---|---|---|
+| `NONE` | — (domyślny) | brak |
+| `SUCCESS` | zielony | `qp-tr-success` |
+| `WARNING` | żółty | `qp-tr-warning` |
+| `DANGER` | czerwony | `qp-tr-danger` |
+| `INFO` | niebieski | `qp-tr-info` |
+| `MUTED` | szary | `qp-tr-muted` |
+
+### Jak zaimplementować
+
+```kotlin
+@Entity
+@Table(name = "task_run")
+@PortalEntity(label = "Uruchomienia zadań", module = "System")
+class TaskRun : RowColorProvider {
+
+    @Column(length = 20)
+    @Enumerated(EnumType.STRING)
+    @PortalField(label = "Status", order = 2, renderer = RendererType.SELECT, selectEnum = TaskRunStatus::class)
+    var status: TaskRunStatus = TaskRunStatus.URUCHOMIONO
+
+    // Implementacja interfejsu — zwraca kolor na podstawie statusu
+    override fun currentStatus(): RowColor? = when (status) {
+        TaskRunStatus.URUCHOMIONO -> RowColor.INFO     // niebieski — w toku
+        TaskRunStatus.ZAKONCZONE  -> RowColor.SUCCESS  // zielony — sukces
+        TaskRunStatus.ERROR       -> RowColor.DANGER   // czerwony — błąd
+        TaskRunStatus.ANULOWANE   -> RowColor.WARNING  // żółty — anulowane
+    }
+}
+```
+
+> `null` zwrócone przez `currentStatus()` jest równoważne `RowColor.NONE` — wiersz nie jest kolorowany.
+> Metadane encji automatycznie zawierają pole `rowColorField = "_rowColor"`, co sygnalizuje frontendowi kolorowanie.
+
+---
+
+## 14. Konfiguracja `portal.ui` — `application.properties`
+
+Framework czyta konfigurację UI przez SmallRye Config z prefiksem `portal.ui`. Wszystkie właściwości mają wartości domyślne — możesz nadpisać tylko to co potrzebujesz.
+
+```properties
+# Tytuł aplikacji w przeglądarce
+portal.ui.title=Quatrion Portal
+
+# Ścieżka do logo (opcjonalnie)
+# portal.ui.logo=/assets/logo.png
+
+# ── Layout ────────────────────────────────────────────────────────────────────
+portal.ui.layout.sidebar.width=256
+portal.ui.layout.sidebar.collapsible=true
+portal.ui.layout.sidebar.default-collapsed=false
+portal.ui.layout.content.max-width=1600
+portal.ui.layout.top-bar.height=56
+portal.ui.layout.top-bar.show-module-selector=true
+portal.ui.layout.top-bar.show-user-menu=true
+portal.ui.layout.top-bar.show-search=false
+
+# ── Motyw (kolory) ────────────────────────────────────────────────────────────
+portal.ui.theme.primary-color=#2563eb
+portal.ui.theme.accent-color=#3b82f6
+portal.ui.theme.sidebar-bg=#1e293b
+portal.ui.theme.sidebar-text=#e2e8f0
+portal.ui.theme.header-bg=#ffffff
+
+# ── Tabela ────────────────────────────────────────────────────────────────────
+portal.ui.table.default-page-size=25
+portal.ui.table.show-row-numbers=false
+portal.ui.table.enable-export=false
+portal.ui.table.sticky-header=true
+
+# ── Formularz ─────────────────────────────────────────────────────────────────
+portal.ui.form.modal-width=lg           # sm | md | lg | xl | 2xl
+portal.ui.form.nested-modal-width=md
+portal.ui.form.show-tab-icons=true
+portal.ui.form.auto-save-interval=0     # sekundy; 0 = wyłączone
+
+# ── Filtry ────────────────────────────────────────────────────────────────────
+portal.ui.filter.position=modal         # modal | sidebar | inline
+portal.ui.filter.remember-filters=true
+portal.ui.filter.max-filter-fields=20
+
+# ── Bezpieczeństwo ────────────────────────────────────────────────────────────
+portal.ui.security.provider=none        # none | keycloak | oidc
+portal.ui.security.roles-attribute=realm_access.roles
+
+# ── Eksport ───────────────────────────────────────────────────────────────────
+portal.export.max-rows=50000            # limit wierszy w jednym eksporcie
+```
+
+### Opis kluczowych właściwości
+
+| Właściwość | Domyślna | Opis |
+|---|---|---|
+| `portal.ui.security.provider` | `"none"` | Dostawca bezpieczeństwa: `"none"` (brak auth), `"keycloak"`, `"oidc"` |
+| `portal.ui.security.roles-attribute` | `"realm_access.roles"` | Ścieżka JSON w tokenie JWT skąd pobierane są role użytkownika. Musi odpowiadać rolom w `@PortalSecurity` |
+| `portal.ui.table.enable-export` | `false` | Gdy `true`, w tabeli pojawia się przycisk eksportu (CSV/XLSX/JSON/PDF) |
+| `portal.ui.form.auto-save-interval` | `0` | Interwał auto-zapisu formularza w sekundach. `0` = wyłączone |
+| `portal.export.max-rows` | `50000` | Maks. liczba wierszy eksportowanych w jednym żądaniu. Nadmiar zwraca HTTP 413 |
+
+---
+
+## 15. Pełna lista endpointów REST API
+
+Wszystkie endpointy wymagają uwierzytelnienia (`@Authenticated`). Bazowa ścieżka: `/api/portal`.
+
+### Metadane
+
+| Metoda | Ścieżka | Opis |
+|---|---|---|
+| `GET` | `/api/portal/metadata` | Pełne metadane portalu (encje, pola, akcje, konfiguracja UI). Obsługuje ETag/304 |
+
+### CRUD encji (`/api/portal/data/{entityName}`)
+
+| Metoda | Ścieżka | Opis |
+|---|---|---|
+| `GET` | `/{entityName}` | Lista rekordów — paginacja, sortowanie, filtrowanie przez query params |
+| `GET` | `/{entityName}/{id}` | Pobierz rekord po ID |
+| `POST` | `/{entityName}` | Utwórz rekord. Zwraca `201 Created` |
+| `PUT` | `/{entityName}/{id}` | Zaktualizuj rekord. Obsługuje optimistic locking (`409 Conflict`) |
+| `DELETE` | `/{entityName}/{id}` | Usuń rekord. Zwraca `204 No Content` |
+| `DELETE` | `/{entityName}/bulk` | Usuń wiele rekordów. Body: `{"ids": [1, 2, 3]}` |
+| `PUT` | `/{entityName}/bulk-update` | Zaktualizuj jedno pole w wielu rekordach. Body: `{"ids": [1,2], "field": "status", "value": "ACTIVE"}` |
+
+### Lookup i wyszukiwanie
+
+| Metoda | Ścieżka | Opis |
+|---|---|---|
+| `GET` | `/{entityName}/lookup` | Opcje dla pickera relacji. Params: `q`, `labelField`, `valueField`, `max`, `filterQuery`, `dependsOnField`, `dependsOnValue`, `orderBy` |
+| `GET` | `/{entityName}/search` | Pełnotekstowe wyszukiwanie po polach TEXT/TEXTAREA/EMAIL/URL. Params: `q` (min. 2 znaki), `page`, `size` |
+| `GET` | `/{entityName}/count` | Liczba rekordów. Zwraca `{"count": 42}` |
+| `GET` | `/{entityName}/stats` | Statystyki pól numerycznych (min/max/avg/sum) |
+
+### Soft-delete
+
+| Metoda | Ścieżka | Opis |
+|---|---|---|
+| `GET` | `/{entityName}/deleted` | Lista soft-usuniętych rekordów (encja musi mieć `softDelete = true`) |
+| `POST` | `/{entityName}/{id}/restore` | Przywróć soft-usunięty rekord |
+
+### Akcje i historia
+
+| Metoda | Ścieżka | Opis |
+|---|---|---|
+| `POST` | `/{entityName}/{id}/action/{actionName}` | Wykonaj akcję. Body: `EntityData` (dane formularza), opcjonalny |
+| `GET` | `/{entityName}/{id}/history` | Historia zmian (encja musi mieć `auditLog = true`). Params: `page`, `size` |
+
+### Eksport i import
+
+| Metoda | Ścieżka | Opis |
+|---|---|---|
+| `GET` | `/{entityName}/export/csv` | Eksport do CSV. Stosuje aktywne filtry z query params. Limit: `portal.export.max-rows` |
+| `GET` | `/{entityName}/export/xlsx` | Eksport do XLSX |
+| `GET` | `/{entityName}/export/json` | Eksport do JSON |
+| `GET` | `/{entityName}/export/pdf` | Eksport do PDF |
+| `POST` | `/{entityName}/import` | Import z CSV. Body: `{"csv": "nagłówek1,nagłówek2\nwartość1,wartość2\n..."}` |
+| `POST` | `/{entityName}/batch` | Batch-create z JSON array. Body: `[{...}, {...}]` |
+
+### Filtrowanie w listowaniu
+
+Query parametry dla `GET /{entityName}`:
+
+```
+?filter[fieldName][operator]=value
+&sort=fieldName&order=asc
+&page=0&size=25
+```
+
+Przykłady:
+```
+?filter[status][eq]=ACTIVE
+?filter[name][contains]=kowal
+?filter[price][gte]=100&filter[price][lte]=1000
+?filter[customerType][in]=VIP,PREMIUM
+?sort=name&order=asc&page=0&size=50
+```
+
+---
+
+## 16. Szybka referencja adnotacji
+
+| Adnotacja | Target | Powtarzalna | Opis |
+|---|---|---|---|
+| `@PortalEntity` | Klasa | Nie | Rejestruje encję; ustawia label, moduł, ikonę, zakładki, uprawnienia, rozmiar strony, soft-delete |
+| `@PortalAction` | Klasa | **Tak** | Deklaruje przycisk akcji z handlerem, opcjonalnym formularzem, potwierdzeniem |
+| `@PortalSecurity` | Klasa | Nie | Kontrola dostępu oparta na rolach (view/edit/delete/action + row-level ownership) |
+| `@PortalField` | Pole/Funkcja | Nie | Deklaruje pole UI; ustawia renderer, filtr, walidację, szerokość, grupę |
+| `@PortalRelation` | Pole | Nie | Konfiguruje encję docelową, wyświetlane kolumny, akcje per-wiersz dla RELATION/RELATION_LIST |
+| `@PortalLookup` | Pole/Funkcja | Nie | Konfiguruje label/value pól lookupa, filtr, kaskadową zależność, parentField |
+| `@PortalDependency` | Pole/Funkcja | **Tak** | Warunkowa widoczność, dostępne wartości i zakres numeryczny |
+| `@PortalFormField` | Pole | Nie | Opisuje pole w modelu formularza akcji (użyj `@field:`) |
+| `@Regex` | Pole | Nie | Dołącza wzorzec regex dla walidacji po stronie frontendu |
+| `RowColorProvider` | Interfejs (klasa) | — | Implementuj aby sterować kolorem wiersza w tabeli |
