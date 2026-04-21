@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "dev.quatrion"
-version = "0.0.3-RC1"
+version = "latest"
 
 repositories {
     mavenLocal()
