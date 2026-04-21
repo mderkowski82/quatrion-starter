@@ -84,32 +84,3 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-
-  # ── Frontend (Next.js — pulled image, no local sources needed) ────────────
-  frontend:
-    image: ghcr.io/mderkowski82/quatrion-portal-frontend:${FRONTEND_VERSION:-latest}
-    environment:
-      BACKEND_URL: "http://host.docker.internal:8080"
-      AUTH_SECRET: ${AUTH_SECRET}
-      AUTH_TRUST_HOST: "true"
-      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
-      # Must match KC_HOSTNAME_URL so that Auth.js v5 issuer validation passes.
-      # host.docker.internal is reachable both from inside Docker and from the host browser.
-      KEYCLOAK_URL: "http://host.docker.internal:8180"
-      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-quatrion}
-      KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-quatrion-frontend}
-      KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET:-quatrion-frontend-dev-secret}
-    ports:
-      - "3000:3000"
-    restart: unless-stopped
-    depends_on:
-      keycloak:
-        condition: service_healthy
-    healthcheck:
-      test: [ "CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/auth/csrf || exit 1" ]
-      interval: 10s
-      timeout: 3s
-      retries: 5
-      start_period: 15s
-
-
