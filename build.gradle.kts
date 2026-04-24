@@ -5,12 +5,14 @@ plugins {
 }
 
 group = "dev.quatrion"
-version = "+"
+version = "0.0.6+"
 
 repositories {
     mavenLocal()
     mavenCentral()
 }
+
+
 
 dependencies {
     // Quatrion Portal framework (local build)
