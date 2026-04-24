@@ -56,10 +56,10 @@ data class NotifyReadersForm(
 @Unremovable
 class ArchiveBookHandler {
     suspend fun validate(entity: dev.acme.portal.entity.Book, formData: EntityData?): String? {
-        return if (entity.status == _root_ide_package_.dev.acme.portal.entity.BookStatus.ARCHIVED) "Książka jest już zarchiwizowana" else null
+        return if (entity.status == BookStatus.ARCHIVED) "Książka jest już zarchiwizowana" else null
     }
     suspend fun execute(entity: dev.acme.portal.entity.Book, formData: EntityData?): ActionResult {
-        entity.status = _root_ide_package_.dev.acme.portal.entity.BookStatus.ARCHIVED
+        entity.status = BookStatus.ARCHIVED
         return ActionResult.Success("Książka #${entity.id} została zarchiwizowana.", refreshTable = true)
     }
 }
@@ -100,7 +100,7 @@ class NotifyReadersHandler {
     icon = "book-open",
     order = 3,
     description = "Katalog wszystkich książek w bibliotece",
-    tabs = _root_ide_package_.dev.acme.portal.entity.BookTab::class,
+    tabs = BookTab::class,
     pageSize = 50,
     auditLog = true
 )
@@ -115,7 +115,7 @@ class NotifyReadersHandler {
     label = "Archiwizuj",
     labelKey = "action.book.archive",
     icon = "archive",
-    handler = _root_ide_package_.dev.acme.portal.entity.ArchiveBookHandler::class,
+    handler = ArchiveBookHandler::class,
     confirmMessage = "Czy na pewno zarchiwizowac te ksiazke?",
     variant = "destructive",
     order = 1
@@ -125,7 +125,7 @@ class NotifyReadersHandler {
     label = "Eksportuj PDF",
     labelKey = "action.book.exportPdf",
     icon = "file-down",
-    handler = _root_ide_package_.dev.acme.portal.entity.ExportBookPdfHandler::class,
+    handler = ExportBookPdfHandler::class,
     variant = "outline",
     order = 2
 )
@@ -134,8 +134,8 @@ class NotifyReadersHandler {
     label = "Powiadom czytelników",
     labelKey = "action.book.notifyReaders",
     icon = "bell",
-    handler = _root_ide_package_.dev.acme.portal.entity.NotifyReadersHandler::class,
-    formModel = _root_ide_package_.dev.acme.portal.entity.NotifyReadersForm::class,
+    handler = NotifyReadersHandler::class,
+    formModel = NotifyReadersForm::class,
     bulkAllowed = true,
     variant = "secondary",
     order = 3
@@ -173,10 +173,10 @@ class Book: PanacheEntityBase {
         label = "Status", labelKey = "field.book.status",
         tab = "BASIC", order = 3,
         renderer = RendererType.SELECT, filterType = FilterType.IN,
-        selectEnum = _root_ide_package_.dev.acme.portal.entity.BookStatus::class,
+        selectEnum = BookStatus::class,
         defaultValue = "AVAILABLE"
     )
-    var status: dev.acme.portal.entity.BookStatus = _root_ide_package_.dev.acme.portal.entity.BookStatus.AVAILABLE
+    var status: dev.acme.portal.entity.BookStatus = BookStatus.AVAILABLE
     @Column(nullable = false)
     @PortalField(
         label = "Dostępna w wypożyczalni", labelKey = "field.common.isActive",
@@ -252,7 +252,7 @@ class Book: PanacheEntityBase {
         label = "Tagi", labelKey = "field.book.tags",
         tab = "DETAILS", order = 5,
         renderer = RendererType.MULTI_SELECT, filterType = FilterType.IN,
-        selectEnum = _root_ide_package_.dev.acme.portal.entity.BookTag::class,
+        selectEnum = BookTag::class,
         showInTable = false,
         tooltip = "Możesz wybrać kilka tagów jednocześnie"
     )
@@ -283,7 +283,7 @@ class Book: PanacheEntityBase {
         tooltip = "Autor lub współautor książki"
     )
     @PortalRelation(
-        targetEntity = _root_ide_package_.dev.acme.portal.entity.Author::class,
+        targetEntity = Author::class,
         editable = true,
         displayFields = ["firstName", "lastName", "email"],
         searchFields = ["firstName", "lastName"],
@@ -304,7 +304,7 @@ class Book: PanacheEntityBase {
         tooltip = "Gatunek literacki z aktywnego słownika"
     )
     @PortalRelation(
-        targetEntity = _root_ide_package_.dev.acme.portal.entity.Genre::class,
+        targetEntity = Genre::class,
         editable = true,
         displayFields = ["name", "abbreviation"],
         searchFields = ["name", "abbreviation"],

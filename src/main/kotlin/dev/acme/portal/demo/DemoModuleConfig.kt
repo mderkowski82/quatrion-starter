@@ -41,16 +41,16 @@ class DemoModuleConfig : PortalModuleConfig() {
         labelKey = "module.library",
         icon = "book-open",
         order = 1,
-        defaultEntity = _root_ide_package_.dev.acme.portal.entity.Book::class.java,
+        defaultEntity = Book::class.java,
         entities = listOf(
             // Słowniki — encje pomocnicze bez zakładek (płaskie formularze)
-            EntityRef(entityClass = _root_ide_package_.dev.acme.portal.entity.Genre::class.java,  group = "Słowniki",   order = 1),
-            EntityRef(entityClass = _root_ide_package_.dev.acme.portal.entity.Author::class.java, group = "Słowniki",   order = 2),
+            EntityRef(entityClass = Genre::class.java,  group = "Słowniki",   order = 1),
+            EntityRef(entityClass = Author::class.java, group = "Słowniki",   order = 2),
             // Katalog — centralna encja z zakładkami, akcjami i security
-            EntityRef(entityClass = _root_ide_package_.dev.acme.portal.entity.Book::class.java,   group = "Katalog",    order = 1),
+            EntityRef(entityClass = Book::class.java,   group = "Katalog",    order = 1),
             // Użytkownicy i operacje
-            EntityRef(entityClass = _root_ide_package_.dev.acme.portal.entity.Member::class.java, group = "Użytkownicy", order = 1),
-            EntityRef(entityClass = _root_ide_package_.dev.acme.portal.entity.Loan::class.java,   group = "Operacje",   order = 1)
+            EntityRef(entityClass = Member::class.java, group = "Użytkownicy", order = 1),
+            EntityRef(entityClass = Loan::class.java,   group = "Operacje",   order = 1)
         )
     )
 

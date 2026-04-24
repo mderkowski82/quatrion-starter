@@ -124,7 +124,7 @@ class ExportMembersHandler {
     groupKey = "group.users",
     icon = "users",
     description = "Zarejestrowani czytelnicy biblioteki — mogą wypożyczać książki",
-    tabs = _root_ide_package_.dev.acme.portal.entity.MemberTab::class,
+    tabs = MemberTab::class,
     softDelete = true,
     auditLog = true,
     pageSize = 25
@@ -140,7 +140,7 @@ class ExportMembersHandler {
     label = "Aktywuj konto",
     labelKey = "action.member.activate",
     icon = "check-circle",
-    handler = _root_ide_package_.dev.acme.portal.entity.ActivateMemberHandler::class,
+    handler = ActivateMemberHandler::class,
     confirmMessage = "Czy aktywować konto tego czytelnika?",
     variant = "default",
     order = 1
@@ -150,8 +150,8 @@ class ExportMembersHandler {
     label = "Wyślij wiadomość powitalną",
     labelKey = "action.member.sendWelcomeEmail",
     icon = "mail",
-    handler = _root_ide_package_.dev.acme.portal.entity.SendWelcomeEmailHandler::class,
-    formModel = _root_ide_package_.dev.acme.portal.entity.SendWelcomeEmailForm::class,
+    handler = SendWelcomeEmailHandler::class,
+    formModel = SendWelcomeEmailForm::class,
     variant = "outline",
     order = 2
 )
@@ -160,7 +160,7 @@ class ExportMembersHandler {
     label = "Eksportuj do CSV",
     labelKey = "action.member.exportCsv",
     icon = "download",
-    handler = _root_ide_package_.dev.acme.portal.entity.ExportMembersHandler::class,
+    handler = ExportMembersHandler::class,
     bulkAllowed = true,
     variant = "secondary",
     order = 3
@@ -198,11 +198,11 @@ class Member: PanacheEntityBase {
         label = "Typ członkostwa", labelKey = "field.member.membershipType",
         tab = "BASIC", order = 3,
         renderer = RendererType.SELECT, filterType = FilterType.IN,
-        selectEnum = _root_ide_package_.dev.acme.portal.entity.MembershipType::class,
+        selectEnum = MembershipType::class,
         defaultValue = "STANDARD",
         tooltip = "Typ karty bibliotecznej — wpływa na limity i uprawnienia"
     )
-    var membershipType: dev.acme.portal.entity.MembershipType = _root_ide_package_.dev.acme.portal.entity.MembershipType.STANDARD
+    var membershipType: dev.acme.portal.entity.MembershipType = MembershipType.STANDARD
 
     @Column(nullable = false)
     @PortalField(
@@ -321,7 +321,7 @@ class Member: PanacheEntityBase {
         label = "Tagi czytelnika", labelKey = "field.member.tags",
         tab = "MEMBERSHIP", order = 4,
         renderer = RendererType.MULTI_SELECT, filterType = FilterType.IN,
-        selectEnum = _root_ide_package_.dev.acme.portal.entity.MemberTag::class,
+        selectEnum = MemberTag::class,
         showInTable = false,
         tooltip = "Kategorie czytelnika"
     )
@@ -372,7 +372,7 @@ class Member: PanacheEntityBase {
         tooltip = "Lista wszystkich wypożyczeń powiązanych z tym czytelnikiem"
     )
     @PortalRelation(
-        targetEntity = _root_ide_package_.dev.acme.portal.entity.Loan::class,
+        targetEntity = Loan::class,
         editable = false,
         displayFields = ["bookTitle", "loanDate", "dueDate", "returnDate", "status"],
         searchFields = ["status"],

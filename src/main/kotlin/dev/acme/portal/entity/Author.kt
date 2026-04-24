@@ -32,7 +32,7 @@ enum class AuthorTab(
     icon = "pen-line",
     order = 2,
     description = "Autorzy książek dostępnych w bibliotece",
-    tabs = _root_ide_package_.dev.acme.portal.entity.AuthorTab::class,
+    tabs = AuthorTab::class,
     auditLog = true,
     pageSize = 25
 )

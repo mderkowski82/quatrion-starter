@@ -501,8 +501,8 @@ class GenericCrudServiceUnitTest {
     @Test
     fun `DemoCustomer URL - website field is set`() {
         val e = CustomerLikeEntity()
-        mapper.mapToEntity(e, EntityData(mapOf("website" to "https://quatrion.com")), CustomerLikeEntity::class.java)
-        assertEquals("https://quatrion.com", e.website)
+        mapper.mapToEntity(e, EntityData(mapOf("website" to "https://quatrion.dev")), CustomerLikeEntity::class.java)
+        assertEquals("https://quatrion.dev", e.website)
     }
 
     // ── PASSWORD ──────────────────────────────────────────────────────────────

@@ -50,8 +50,8 @@ data class ExtendLoanForm(
 class ReturnBookHandler {
     suspend fun validate(entity: dev.acme.portal.entity.Loan, formData: EntityData?): String? {
         return when (entity.status) {
-            _root_ide_package_.dev.acme.portal.entity.LoanStatus.RETURNED  -> "Książka została już zwrócona"
-            _root_ide_package_.dev.acme.portal.entity.LoanStatus.CANCELLED -> "Wypożyczenie zostało anulowane — zwrot niemożliwy"
+            LoanStatus.RETURNED  -> "Książka została już zwrócona"
+            LoanStatus.CANCELLED -> "Wypożyczenie zostało anulowane — zwrot niemożliwy"
             else                 -> null
         }
     }
@@ -69,8 +69,8 @@ class ReturnBookHandler {
 class ExtendLoanHandler {
     suspend fun validate(entity: dev.acme.portal.entity.Loan, formData: EntityData?): String? {
         return when {
-            entity.status == _root_ide_package_.dev.acme.portal.entity.LoanStatus.RETURNED  -> "Nie można przedłużyć zwróconego wypożyczenia"
-            entity.status == _root_ide_package_.dev.acme.portal.entity.LoanStatus.CANCELLED -> "Nie można przedłużyć anulowanego wypożyczenia"
+            entity.status == LoanStatus.RETURNED  -> "Nie można przedłużyć zwróconego wypożyczenia"
+            entity.status == LoanStatus.CANCELLED -> "Nie można przedłużyć anulowanego wypożyczenia"
             entity.renewalCount >= 3              -> "Osiągnięto limit 3 przedłużeń dla tego wypożyczenia"
             else                                  -> null
         }
@@ -123,7 +123,7 @@ class ExtendLoanHandler {
     label = "Zarejestruj zwrot",
     labelKey = "action.loan.returnBook",
     icon = "book-check",
-    handler = _root_ide_package_.dev.acme.portal.entity.ReturnBookHandler::class,
+    handler = ReturnBookHandler::class,
     confirmMessage = "Czy potwierdzasz zwrot książki? Operacja ustawia datę dzisiejszą jako datę zwrotu.",
     confirmMessageKey = "action.loan.returnBook.confirm",
     variant = "destructive",
@@ -134,8 +134,8 @@ class ExtendLoanHandler {
     label = "Przedłuż wypożyczenie",
     labelKey = "action.loan.extend",
     icon = "calendar-plus",
-    handler = _root_ide_package_.dev.acme.portal.entity.ExtendLoanHandler::class,
-    formModel = _root_ide_package_.dev.acme.portal.entity.ExtendLoanForm::class,
+    handler = ExtendLoanHandler::class,
+    formModel = ExtendLoanForm::class,
     variant = "outline",
     order = 2
 )
@@ -156,7 +156,7 @@ class Loan: PanacheEntityBase {
         tooltipKey = "tooltip.loan.memberId"
     )
     @PortalRelation(
-        targetEntity = _root_ide_package_.dev.acme.portal.entity.Member::class,
+        targetEntity = Member::class,
         editable = false,
         displayFields = ["firstName", "lastName", "email"],
         searchFields = ["firstName", "lastName", "email"]
@@ -184,7 +184,7 @@ class Loan: PanacheEntityBase {
         tooltipKey = "tooltip.loan.genreFilter"
     )
     @PortalRelation(
-        targetEntity = _root_ide_package_.dev.acme.portal.entity.Genre::class,
+        targetEntity = Genre::class,
         editable = true,
         displayFields = ["name"],
         searchFields = ["name"]
@@ -208,7 +208,7 @@ class Loan: PanacheEntityBase {
         tooltipKey = "tooltip.loan.bookId"
     )
     @PortalRelation(
-        targetEntity = _root_ide_package_.dev.acme.portal.entity.Book::class,
+        targetEntity = Book::class,
         editable = true,
         displayFields = ["title", "isbn", "status"],
         searchFields = ["title", "isbn"],
@@ -256,11 +256,11 @@ class Loan: PanacheEntityBase {
         label = "Status wypożyczenia", labelKey = "field.loan.status",
         order = 4,
         renderer = RendererType.SELECT, filterType = FilterType.IN,
-        selectEnum = _root_ide_package_.dev.acme.portal.entity.LoanStatus::class,
+        selectEnum = LoanStatus::class,
         defaultValue = "ACTIVE"
     )
     @Enumerated(EnumType.STRING)
-    var status: dev.acme.portal.entity.LoanStatus = _root_ide_package_.dev.acme.portal.entity.LoanStatus.ACTIVE
+    var status: dev.acme.portal.entity.LoanStatus = LoanStatus.ACTIVE
 
     @Column(nullable = false)
     @PortalField(

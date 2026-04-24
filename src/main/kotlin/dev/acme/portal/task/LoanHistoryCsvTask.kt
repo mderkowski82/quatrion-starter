@@ -84,7 +84,7 @@ class LoanHistoryCsvTask : AbstractTask(), PanacheEntityBase {
         tooltip = "Zostaw puste, aby wygenerować CSV dla wszystkich czytelników"
     )
     @PortalRelation(
-        targetEntity = _root_ide_package_.dev.acme.portal.entity.Member::class,
+        targetEntity = Member::class,
         editable = true,
         displayFields = ["firstName", "lastName", "email"],
         searchFields = ["firstName", "lastName", "email"]
