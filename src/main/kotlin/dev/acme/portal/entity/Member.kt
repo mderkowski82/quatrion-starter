@@ -378,11 +378,8 @@ class Member: PanacheEntityBase {
         searchFields = ["status"],
         cascadeDelete = true,
         orderBy = "loanDate DESC",
-        maxItems = 200
-    )
-    @PortalLookup(
+        maxItems = 200,
         labelField = "status",
-        valueField = "id",
         parentField = "memberId",
         maxResults = 200
     )

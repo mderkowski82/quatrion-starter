@@ -159,11 +159,8 @@ class Loan: PanacheEntityBase {
         targetEntity = Member::class,
         editable = false,
         displayFields = ["firstName", "lastName", "email"],
-        searchFields = ["firstName", "lastName", "email"]
-    )
-    @PortalLookup(
+        searchFields = ["firstName", "lastName", "email"],
         labelField = "lastName",
-        valueField = "id",
         filterQuery = "e.isActive = true AND e.deleted = false",
         maxResults = 50
     )
@@ -187,11 +184,8 @@ class Loan: PanacheEntityBase {
         targetEntity = Genre::class,
         editable = true,
         displayFields = ["name"],
-        searchFields = ["name"]
-    )
-    @PortalLookup(
+        searchFields = ["name"],
         labelField = "name",
-        valueField = "id",
         filterQuery = "e.isActive = true",
         maxResults = 200
     )
@@ -212,11 +206,8 @@ class Loan: PanacheEntityBase {
         editable = true,
         displayFields = ["title", "isbn", "status"],
         searchFields = ["title", "isbn"],
-        createAllowed = false
-    )
-    @PortalLookup(
+        createAllowed = false,
         labelField = "title",
-        valueField = "id",
         filterQuery = "e.isActive = true AND e.status = 'AVAILABLE'",
         dependsOn = "genreId",
         maxResults = 50

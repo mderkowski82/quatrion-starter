@@ -87,11 +87,8 @@ class LoanHistoryCsvTask : AbstractTask(), PanacheEntityBase {
         targetEntity = Member::class,
         editable = true,
         displayFields = ["firstName", "lastName", "email"],
-        searchFields = ["firstName", "lastName", "email"]
-    )
-    @PortalLookup(
+        searchFields = ["firstName", "lastName", "email"],
         labelField = "lastName",
-        valueField = "id",
         filterQuery = "e.isActive = true AND e.deleted = false",
         maxResults = 100
     )
@@ -128,9 +125,9 @@ class LoanHistoryCsvTask : AbstractTask(), PanacheEntityBase {
         editable = false,
         inlineEdit = false,
         displayFields = ["status", "startedBy", "startedAt", "finishedAt"],
-        maxItems = 50
+        maxItems = 50,
+        parentField = "taskRefId"
     )
-    @PortalLookup(parentField = "taskRefId")
     var taskRuns: List<TaskRun>? = null
 }
 

@@ -212,7 +212,6 @@ class DemoCategory {
         showInTable = false
     )
     @PortalRelation(targetEntity = DemoCategory::class, editable = true, displayFields = ["name"], searchFields = ["name"])
-    @PortalLookup(labelField = "name", valueField = "id")
     var parentId: Long? = null
 }
 
@@ -411,7 +410,6 @@ class DemoCustomer {
         showInTable = false
     )
     @PortalRelation(targetEntity = _root_ide_package_.dev.acme.portal.demo.DemoCountry::class, editable = true, displayFields = ["name", "code"], searchFields = ["name", "code"])
-    @PortalLookup(labelField = "name", valueField = "id")
     var countryId: Long? = null
 
     // ── FINANCIAL tab ──────────────────────────────────────
@@ -525,7 +523,6 @@ class DemoCustomer {
         showInTable = false
     )
     @PortalRelation(targetEntity = _root_ide_package_.dev.acme.portal.demo.DemoCategory::class, editable = true, displayFields = ["name"], searchFields = ["name"])
-    @PortalLookup(labelField = "name", valueField = "id")
     var categoryId: Long? = null
 
     // ── SYSTEM tab ─────────────────────────────────────────
@@ -606,9 +603,9 @@ class DemoCustomer {
         targetEntity = _root_ide_package_.dev.acme.portal.demo.DemoOrder::class,
         editable = false,
         displayFields = ["orderNumber", "orderDate", "totalAmount", "status"],
-        searchFields = ["orderNumber"]
+        searchFields = ["orderNumber"],
+        labelField = "orderNumber"
     )
-    @PortalLookup(labelField = "orderNumber", valueField = "id")
     var orders: List<dev.acme.portal.demo.DemoOrder>? = null
 
     /**
@@ -761,7 +758,6 @@ class DemoOrder {
         filterType = FilterType.EXACT
     )
     @PortalRelation(targetEntity = _root_ide_package_.dev.acme.portal.demo.DemoCustomer::class, editable = true, displayFields = ["name", "email"], searchFields = ["name", "email"])
-    @PortalLookup(labelField = "name", valueField = "id")
     var customerId: Long? = null
 
     // ── ITEMS tab ──────────────────────────────────────────
@@ -825,7 +821,6 @@ class DemoOrderItem {
         filterType = FilterType.EXACT
     )
     @PortalRelation(targetEntity = _root_ide_package_.dev.acme.portal.demo.DemoOrder::class, editable = false, displayFields = ["orderNumber"], searchFields = ["orderNumber"])
-    @PortalLookup(labelField = "orderNumber", valueField = "id")
     var orderId: Long? = null
 
     @Column
@@ -836,7 +831,6 @@ class DemoOrderItem {
         filterType = FilterType.EXACT
     )
     @PortalRelation(targetEntity = _root_ide_package_.dev.acme.portal.demo.DemoProduct::class, editable = true, displayFields = ["name", "sku"], searchFields = ["name", "sku"])
-    @PortalLookup(labelField = "name", valueField = "id")
     var productId: Long? = null
 
     @Column
@@ -965,7 +959,6 @@ class DemoProduct {
         filterType = FilterType.EXACT
     )
     @PortalRelation(targetEntity = _root_ide_package_.dev.acme.portal.demo.DemoCategory::class, editable = true, displayFields = ["name"], searchFields = ["name"])
-    @PortalLookup(labelField = "name", valueField = "id")
     var categoryId: Long? = null
 
     // ── DETAILS tab ────────────────────────────────────────
@@ -1015,7 +1008,6 @@ class DemoProduct {
         showInTable = false
     )
     @PortalRelation(targetEntity = _root_ide_package_.dev.acme.portal.demo.DemoCountry::class, editable = true, displayFields = ["name", "code"], searchFields = ["name"])
-    @PortalLookup(labelField = "name", valueField = "id")
     var countryId: Long? = null
 
     @Column
@@ -1028,7 +1020,6 @@ class DemoProduct {
         showInTable = false
     )
     @PortalRelation(targetEntity = _root_ide_package_.dev.acme.portal.demo.DemoSupplier::class, editable = true, displayFields = ["name"], searchFields = ["name"])
-    @PortalLookup(labelField = "name", valueField = "id")
     var supplierId: Long? = null
 
     // ── MEDIA tab ──────────────────────────────────────────

@@ -287,11 +287,8 @@ class Book: PanacheEntityBase {
         editable = true,
         displayFields = ["firstName", "lastName", "email"],
         searchFields = ["firstName", "lastName"],
-        createAllowed = true
-    )
-    @PortalLookup(
+        createAllowed = true,
         labelField = "lastName",
-        valueField = "id",
         filterQuery = "e.isActive = true",
         maxResults = 100
     )
@@ -308,11 +305,8 @@ class Book: PanacheEntityBase {
         editable = true,
         displayFields = ["name", "abbreviation"],
         searchFields = ["name", "abbreviation"],
-        orderBy = "name ASC"
-    )
-    @PortalLookup(
+        orderBy = "name ASC",
         labelField = "name",
-        valueField = "id",
         filterQuery = "e.isActive = true",
         maxResults = 200
     )

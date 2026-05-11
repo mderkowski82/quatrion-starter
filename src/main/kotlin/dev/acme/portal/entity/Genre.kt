@@ -116,11 +116,8 @@ class Genre: PanacheEntityBase {
         targetEntity = Genre::class,
         editable = true,
         displayFields = ["name", "abbreviation"],
-        searchFields = ["name", "abbreviation"]
-    )
-    @PortalLookup(
+        searchFields = ["name", "abbreviation"],
         labelField = "name",
-        valueField = "id",
         filterQuery = "e.isActive = true",
         maxResults = 200
     )
