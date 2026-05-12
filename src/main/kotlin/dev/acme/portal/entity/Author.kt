@@ -1,7 +1,8 @@
 package dev.acme.portal.entity
 
 import dev.quatrion.portal.annotation.*
-import io.quarkus.hibernate.reactive.panache.kotlin.PanacheEntityBase
+import dev.quatrion.portal.base.AuditableEntity
+
 import jakarta.persistence.*
 
 // ─── Zakładki formularza Autora ──────────────────────────────────────────────
@@ -36,7 +37,7 @@ enum class AuthorTab(
     auditLog = true,
     pageSize = 25
 )
-class Author: PanacheEntityBase {
+class Author : AuditableEntity() {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

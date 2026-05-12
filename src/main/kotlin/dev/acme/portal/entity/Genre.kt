@@ -1,7 +1,8 @@
 package dev.acme.portal.entity
 
 import dev.quatrion.portal.annotation.*
-import io.quarkus.hibernate.reactive.panache.kotlin.PanacheEntityBase
+import dev.quatrion.portal.base.AuditableEntity
+
 import jakarta.persistence.*
 
 // ─── Encja: Gatunek literacki ────────────────────────────────────────────────
@@ -24,7 +25,7 @@ import jakarta.persistence.*
     softDelete = true,
     pageSize = 50
 )
-class Genre: PanacheEntityBase {
+class Genre : AuditableEntity() {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

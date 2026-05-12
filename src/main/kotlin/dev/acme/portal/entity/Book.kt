@@ -1,11 +1,12 @@
 ﻿package dev.acme.portal.entity
 
 import dev.quatrion.portal.annotation.*
+import dev.quatrion.portal.base.AuditableEntity
 import dev.quatrion.portal.model.ActionResult
 import dev.quatrion.portal.model.EntityData
 import io.quarkus.arc.Unremovable
-import io.quarkus.hibernate.reactive.panache.kotlin.PanacheEntity
-import io.quarkus.hibernate.reactive.panache.kotlin.PanacheEntityBase
+
+
 import jakarta.enterprise.context.ApplicationScoped
 import jakarta.persistence.*
 // ─── Enums ───────────────────────────────────────────────────────────────────
@@ -140,7 +141,7 @@ class NotifyReadersHandler {
     variant = "secondary",
     order = 3
 )
-class Book: PanacheEntityBase {
+class Book : AuditableEntity() {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @PortalField(label = "ID", labelKey = "field.common.id", tab = "BASIC", order = 0, readonly = true, showInFilter = false, width = 80)

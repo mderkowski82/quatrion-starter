@@ -1,10 +1,11 @@
 package dev.acme.portal.entity
 
 import dev.quatrion.portal.annotation.*
+import dev.quatrion.portal.base.AuditableEntity
 import dev.quatrion.portal.model.ActionResult
 import dev.quatrion.portal.model.EntityData
 import io.quarkus.arc.Unremovable
-import io.quarkus.hibernate.reactive.panache.kotlin.PanacheEntityBase
+
 import jakarta.enterprise.context.ApplicationScoped
 import jakarta.persistence.*
 import org.hibernate.annotations.Formula
@@ -139,7 +140,7 @@ class ExtendLoanHandler {
     variant = "outline",
     order = 2
 )
-class Loan: PanacheEntityBase {
+class Loan : AuditableEntity() {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -329,17 +330,6 @@ class Loan: PanacheEntityBase {
     )
     var overdueNotes: String = ""
 
-    // createdAt — DATETIME renderer (tylko do odczytu)
-    @Column
-    @PortalField(
-        label = "Utworzono", labelKey = "field.common.createdAt",
-        order = 10,
-        renderer = RendererType.DATETIME, filterType = FilterType.NONE,
-        readonly = true, showInFilter = false,
-        tooltip = "Data i godzina założenia rekordu wypożyczenia",
-        tooltipKey = "tooltip.loan.createdAt"
-    )
-    var createdAt: String = ""
 }
 
 

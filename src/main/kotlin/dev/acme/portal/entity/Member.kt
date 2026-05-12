@@ -1,10 +1,10 @@
 package dev.acme.portal.entity
 
 import dev.quatrion.portal.annotation.*
+import dev.quatrion.portal.base.AuditableEntity
 import dev.quatrion.portal.model.ActionResult
 import dev.quatrion.portal.model.EntityData
 import io.quarkus.arc.Unremovable
-import io.quarkus.hibernate.reactive.panache.kotlin.PanacheEntityBase
 import jakarta.enterprise.context.ApplicationScoped
 import jakarta.persistence.*
 // ─── Enums ───────────────────────────────────────────────────────────────────
@@ -165,7 +165,7 @@ class ExportMembersHandler {
     variant = "secondary",
     order = 3
 )
-class Member: PanacheEntityBase {
+class Member : AuditableEntity() {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
