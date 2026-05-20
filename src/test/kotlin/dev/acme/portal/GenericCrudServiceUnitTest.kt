@@ -5,10 +5,19 @@ import dev.quatrion.portal.annotation.PortalField
 import dev.quatrion.portal.annotation.RendererType
 import dev.quatrion.portal.model.EntityData
 import dev.quatrion.portal.service.EntityMapper
+import dev.quatrion.portal.service.FilterParser
 import dev.quatrion.portal.service.GenericCrudService
 import jakarta.persistence.Transient
+import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
+import java.math.BigInteger
+import java.time.Instant
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.ZoneId
+import java.time.ZonedDateTime
+import java.util.UUID
 
 // ── Test fixtures ─────────────────────────────────────────────────────────────
 
@@ -63,7 +72,11 @@ class KotlinTransientEntity {
 
 class GenericCrudServiceUnitTest {
 
-    private val service = GenericCrudService(filterParser = dev.quatrion.portal.service.FilterParser())
+    private val service = GenericCrudService(
+        filterParser = FilterParser(),
+        metadataService = TODO(),
+        entityRegistry = TODO()
+    )
     private val mapper = EntityMapper()
 
     // ── entityToMap ───────────────────────────────────────────────────────────
@@ -759,19 +772,19 @@ class GenericCrudServiceUnitTest {
     fun `mapToEntity coerces ISO date string to LocalDate`() {
         val e = ExtendedTypesEntity()
         mapper.mapToEntity(e, EntityData(mapOf("birthDate" to "2000-01-15")), ExtendedTypesEntity::class.java)
-        assertEquals(java.time.LocalDate.of(2000, 1, 15), e.birthDate)
+        assertEquals(LocalDate.of(2000, 1, 15), e.birthDate)
     }
 
     @Test
     fun `mapToEntity sets LocalDate to null from null`() {
-        val e = ExtendedTypesEntity().apply { birthDate = java.time.LocalDate.now() }
+        val e = ExtendedTypesEntity().apply { birthDate = LocalDate.now() }
         mapper.mapToEntity(e, EntityData(mapOf("birthDate" to null)), ExtendedTypesEntity::class.java)
         assertNull(e.birthDate)
     }
 
     @Test
     fun `mapToEntity sets LocalDate to null from blank string`() {
-        val e = ExtendedTypesEntity().apply { birthDate = java.time.LocalDate.now() }
+        val e = ExtendedTypesEntity().apply { birthDate = LocalDate.now() }
         mapper.mapToEntity(e, EntityData(mapOf("birthDate" to "")), ExtendedTypesEntity::class.java)
         assertNull(e.birthDate)
     }
@@ -779,7 +792,7 @@ class GenericCrudServiceUnitTest {
     @Test
     fun `mapToEntity passes through LocalDate instance directly`() {
         val e = ExtendedTypesEntity()
-        val date = java.time.LocalDate.of(2025, 6, 15)
+        val date = LocalDate.of(2025, 6, 15)
         mapper.mapToEntity(e, EntityData(mapOf("birthDate" to date)), ExtendedTypesEntity::class.java)
         assertEquals(date, e.birthDate)
     }
@@ -797,26 +810,26 @@ class GenericCrudServiceUnitTest {
     fun `mapToEntity coerces ISO datetime string to LocalDateTime`() {
         val e = ExtendedTypesEntity()
         mapper.mapToEntity(e, EntityData(mapOf("createdAt" to "2026-03-24T10:30:00")), ExtendedTypesEntity::class.java)
-        assertEquals(java.time.LocalDateTime.of(2026, 3, 24, 10, 30, 0), e.createdAt)
+        assertEquals(LocalDateTime.of(2026, 3, 24, 10, 30, 0), e.createdAt)
     }
 
     @Test
     fun `mapToEntity coerces ISO datetime without seconds to LocalDateTime`() {
         val e = ExtendedTypesEntity()
         mapper.mapToEntity(e, EntityData(mapOf("createdAt" to "2026-03-24T10:30")), ExtendedTypesEntity::class.java)
-        assertEquals(java.time.LocalDateTime.of(2026, 3, 24, 10, 30), e.createdAt)
+        assertEquals(LocalDateTime.of(2026, 3, 24, 10, 30), e.createdAt)
     }
 
     @Test
     fun `mapToEntity sets LocalDateTime to null from null`() {
-        val e = ExtendedTypesEntity().apply { createdAt = java.time.LocalDateTime.now() }
+        val e = ExtendedTypesEntity().apply { createdAt = LocalDateTime.now() }
         mapper.mapToEntity(e, EntityData(mapOf("createdAt" to null)), ExtendedTypesEntity::class.java)
         assertNull(e.createdAt)
     }
 
     @Test
     fun `mapToEntity sets LocalDateTime to null from blank string`() {
-        val e = ExtendedTypesEntity().apply { createdAt = java.time.LocalDateTime.now() }
+        val e = ExtendedTypesEntity().apply { createdAt = LocalDateTime.now() }
         mapper.mapToEntity(e, EntityData(mapOf("createdAt" to "")), ExtendedTypesEntity::class.java)
         assertNull(e.createdAt)
     }
@@ -824,7 +837,7 @@ class GenericCrudServiceUnitTest {
     @Test
     fun `mapToEntity passes through LocalDateTime instance directly`() {
         val e = ExtendedTypesEntity()
-        val dt = java.time.LocalDateTime.of(2026, 1, 1, 12, 0)
+        val dt = LocalDateTime.of(2026, 1, 1, 12, 0)
         mapper.mapToEntity(e, EntityData(mapOf("createdAt" to dt)), ExtendedTypesEntity::class.java)
         assertEquals(dt, e.createdAt)
     }
@@ -843,12 +856,12 @@ class GenericCrudServiceUnitTest {
         val e = ExtendedTypesEntity()
         val uuidStr = "550e8400-e29b-41d4-a716-446655440000"
         mapper.mapToEntity(e, EntityData(mapOf("externalId" to uuidStr)), ExtendedTypesEntity::class.java)
-        assertEquals(java.util.UUID.fromString(uuidStr), e.externalId)
+        assertEquals(UUID.fromString(uuidStr), e.externalId)
     }
 
     @Test
     fun `mapToEntity sets UUID to null from null`() {
-        val e = ExtendedTypesEntity().apply { externalId = java.util.UUID.randomUUID() }
+        val e = ExtendedTypesEntity().apply { externalId = UUID.randomUUID() }
         mapper.mapToEntity(e, EntityData(mapOf("externalId" to null)), ExtendedTypesEntity::class.java)
         assertNull(e.externalId)
     }
@@ -856,7 +869,7 @@ class GenericCrudServiceUnitTest {
     @Test
     fun `mapToEntity passes through UUID instance directly`() {
         val e = ExtendedTypesEntity()
-        val uuid = java.util.UUID.randomUUID()
+        val uuid = UUID.randomUUID()
         mapper.mapToEntity(e, EntityData(mapOf("externalId" to uuid)), ExtendedTypesEntity::class.java)
         assertEquals(uuid, e.externalId)
     }
@@ -874,19 +887,19 @@ class GenericCrudServiceUnitTest {
     fun `mapToEntity coerces string to BigInteger`() {
         val e = ExtendedTypesEntity()
         mapper.mapToEntity(e, EntityData(mapOf("bigNumber" to "999999999999999999")), ExtendedTypesEntity::class.java)
-        assertEquals(java.math.BigInteger("999999999999999999"), e.bigNumber)
+        assertEquals(BigInteger("999999999999999999"), e.bigNumber)
     }
 
     @Test
     fun `mapToEntity coerces Number to BigInteger`() {
         val e = ExtendedTypesEntity()
         mapper.mapToEntity(e, EntityData(mapOf("bigNumber" to 42L)), ExtendedTypesEntity::class.java)
-        assertEquals(java.math.BigInteger.valueOf(42L), e.bigNumber)
+        assertEquals(BigInteger.valueOf(42L), e.bigNumber)
     }
 
     @Test
     fun `mapToEntity sets BigInteger to null from null`() {
-        val e = ExtendedTypesEntity().apply { bigNumber = java.math.BigInteger.TEN }
+        val e = ExtendedTypesEntity().apply { bigNumber = BigInteger.TEN }
         mapper.mapToEntity(e, EntityData(mapOf("bigNumber" to null)), ExtendedTypesEntity::class.java)
         assertNull(e.bigNumber)
     }
@@ -894,7 +907,7 @@ class GenericCrudServiceUnitTest {
     @Test
     fun `mapToEntity passes through BigInteger instance directly`() {
         val e = ExtendedTypesEntity()
-        val big = java.math.BigInteger("123456789012345678901234567890")
+        val big = BigInteger("123456789012345678901234567890")
         mapper.mapToEntity(e, EntityData(mapOf("bigNumber" to big)), ExtendedTypesEntity::class.java)
         assertEquals(big, e.bigNumber)
     }
@@ -910,21 +923,21 @@ class GenericCrudServiceUnitTest {
 
     @Test
     fun `entityToMap serializes LocalDate field`() {
-        val e = ExtendedTypesEntity().apply { birthDate = java.time.LocalDate.of(2000, 1, 15) }
+        val e = ExtendedTypesEntity().apply { birthDate = LocalDate.of(2000, 1, 15) }
         val map = mapper.entityToMap(e)
-        assertEquals(java.time.LocalDate.of(2000, 1, 15), map["birthDate"])
+        assertEquals(LocalDate.of(2000, 1, 15), map["birthDate"])
     }
 
     @Test
     fun `entityToMap serializes LocalDateTime field`() {
-        val e = ExtendedTypesEntity().apply { createdAt = java.time.LocalDateTime.of(2026, 3, 24, 10, 30) }
+        val e = ExtendedTypesEntity().apply { createdAt = LocalDateTime.of(2026, 3, 24, 10, 30) }
         val map = mapper.entityToMap(e)
-        assertEquals(java.time.LocalDateTime.of(2026, 3, 24, 10, 30), map["createdAt"])
+        assertEquals(LocalDateTime.of(2026, 3, 24, 10, 30), map["createdAt"])
     }
 
     @Test
     fun `entityToMap serializes UUID field`() {
-        val uuid = java.util.UUID.fromString("550e8400-e29b-41d4-a716-446655440000")
+        val uuid = UUID.fromString("550e8400-e29b-41d4-a716-446655440000")
         val e = ExtendedTypesEntity().apply { externalId = uuid }
         val map = mapper.entityToMap(e)
         assertEquals(uuid, map["externalId"])
@@ -932,9 +945,9 @@ class GenericCrudServiceUnitTest {
 
     @Test
     fun `entityToMap serializes BigInteger field`() {
-        val e = ExtendedTypesEntity().apply { bigNumber = java.math.BigInteger("999") }
+        val e = ExtendedTypesEntity().apply { bigNumber = BigInteger("999") }
         val map = mapper.entityToMap(e)
-        assertEquals(java.math.BigInteger("999"), map["bigNumber"])
+        assertEquals(BigInteger("999"), map["bigNumber"])
     }
 
     // ════════════════════════════════════════════════════════════════════════════
@@ -945,19 +958,19 @@ class GenericCrudServiceUnitTest {
     fun `mapToEntity coerces ISO instant string to Instant`() {
         val e = ExtendedTypesEntity()
         mapper.mapToEntity(e, EntityData(mapOf("eventTime" to "2026-03-24T10:30:00Z")), ExtendedTypesEntity::class.java)
-        assertEquals(java.time.Instant.parse("2026-03-24T10:30:00Z"), e.eventTime)
+        assertEquals(Instant.parse("2026-03-24T10:30:00Z"), e.eventTime)
     }
 
     @Test
     fun `mapToEntity sets Instant to null from null`() {
-        val e = ExtendedTypesEntity().apply { eventTime = java.time.Instant.now() }
+        val e = ExtendedTypesEntity().apply { eventTime = Instant.now() }
         mapper.mapToEntity(e, EntityData(mapOf("eventTime" to null)), ExtendedTypesEntity::class.java)
         assertNull(e.eventTime)
     }
 
     @Test
     fun `mapToEntity sets Instant to null from blank string`() {
-        val e = ExtendedTypesEntity().apply { eventTime = java.time.Instant.now() }
+        val e = ExtendedTypesEntity().apply { eventTime = Instant.now() }
         mapper.mapToEntity(e, EntityData(mapOf("eventTime" to "")), ExtendedTypesEntity::class.java)
         assertNull(e.eventTime)
     }
@@ -965,7 +978,7 @@ class GenericCrudServiceUnitTest {
     @Test
     fun `mapToEntity passes through Instant instance directly`() {
         val e = ExtendedTypesEntity()
-        val instant = java.time.Instant.parse("2026-01-01T00:00:00Z")
+        val instant = Instant.parse("2026-01-01T00:00:00Z")
         mapper.mapToEntity(e, EntityData(mapOf("eventTime" to instant)), ExtendedTypesEntity::class.java)
         assertEquals(instant, e.eventTime)
     }
@@ -979,7 +992,7 @@ class GenericCrudServiceUnitTest {
 
     @Test
     fun `entityToMap serializes Instant field`() {
-        val instant = java.time.Instant.parse("2026-03-24T10:30:00Z")
+        val instant = Instant.parse("2026-03-24T10:30:00Z")
         val e = ExtendedTypesEntity().apply { eventTime = instant }
         val map = mapper.entityToMap(e)
         assertEquals(instant, map["eventTime"])
@@ -993,7 +1006,7 @@ class GenericCrudServiceUnitTest {
     fun `mapToEntity coerces ISO zoned datetime string to ZonedDateTime`() {
         val e = ExtendedTypesEntity()
         mapper.mapToEntity(e, EntityData(mapOf("meetingTime" to "2026-03-24T10:30:00+02:00[Europe/Warsaw]")), ExtendedTypesEntity::class.java)
-        assertEquals(java.time.ZonedDateTime.parse("2026-03-24T10:30:00+02:00[Europe/Warsaw]"), e.meetingTime)
+        assertEquals(ZonedDateTime.parse("2026-03-24T10:30:00+02:00[Europe/Warsaw]"), e.meetingTime)
     }
 
     @Test
@@ -1008,14 +1021,14 @@ class GenericCrudServiceUnitTest {
 
     @Test
     fun `mapToEntity sets ZonedDateTime to null from null`() {
-        val e = ExtendedTypesEntity().apply { meetingTime = java.time.ZonedDateTime.now() }
+        val e = ExtendedTypesEntity().apply { meetingTime = ZonedDateTime.now() }
         mapper.mapToEntity(e, EntityData(mapOf("meetingTime" to null)), ExtendedTypesEntity::class.java)
         assertNull(e.meetingTime)
     }
 
     @Test
     fun `mapToEntity sets ZonedDateTime to null from blank string`() {
-        val e = ExtendedTypesEntity().apply { meetingTime = java.time.ZonedDateTime.now() }
+        val e = ExtendedTypesEntity().apply { meetingTime = ZonedDateTime.now() }
         mapper.mapToEntity(e, EntityData(mapOf("meetingTime" to "")), ExtendedTypesEntity::class.java)
         assertNull(e.meetingTime)
     }
@@ -1023,7 +1036,7 @@ class GenericCrudServiceUnitTest {
     @Test
     fun `mapToEntity passes through ZonedDateTime instance directly`() {
         val e = ExtendedTypesEntity()
-        val zdt = java.time.ZonedDateTime.now(java.time.ZoneId.of("Europe/Warsaw"))
+        val zdt = ZonedDateTime.now(ZoneId.of("Europe/Warsaw"))
         mapper.mapToEntity(e, EntityData(mapOf("meetingTime" to zdt)), ExtendedTypesEntity::class.java)
         assertEquals(zdt, e.meetingTime)
     }
@@ -1037,7 +1050,7 @@ class GenericCrudServiceUnitTest {
 
     @Test
     fun `entityToMap serializes ZonedDateTime field`() {
-        val zdt = java.time.ZonedDateTime.parse("2026-03-24T10:30:00+02:00[Europe/Warsaw]")
+        val zdt = ZonedDateTime.parse("2026-03-24T10:30:00+02:00[Europe/Warsaw]")
         val e = ExtendedTypesEntity().apply { meetingTime = zdt }
         val map = mapper.entityToMap(e)
         assertEquals(zdt, map["meetingTime"])
@@ -1113,13 +1126,13 @@ class GenericCrudServiceUnitTest {
     // ── restore guard: non-softDelete entities ────────────────────────────────
 
     @Test
-    fun `restore returns false for non-soft-delete entity`() = kotlinx.coroutines.runBlocking {
+    fun `restore returns false for non-soft-delete entity`() = runBlocking {
         val result = service.restore(HardDeleteTestEntity::class.java, 1L)
         assertFalse(result, "restore should return false for entities without softDelete")
     }
 
     @Test
-    fun `restore returns false for entity without PortalEntity annotation`() = kotlinx.coroutines.runBlocking {
+    fun `restore returns false for entity without PortalEntity annotation`() = runBlocking {
         val result = service.restore(String::class.java, 1L)
         assertFalse(result, "restore should return false for classes without @PortalEntity")
     }
@@ -1127,7 +1140,7 @@ class GenericCrudServiceUnitTest {
     // ── batchUpdate ───────────────────────────────────────────────────────────
 
     @Test
-    fun `batchUpdate returns 0 for empty ids list`() = kotlinx.coroutines.runBlocking {
+    fun `batchUpdate returns 0 for empty ids list`() = runBlocking {
         val result = service.batchUpdate(SimpleTestEntity::class.java, emptyList(), "name", "test")
         assertEquals(0, result, "batchUpdate with empty ids must return 0")
     }
@@ -1135,7 +1148,7 @@ class GenericCrudServiceUnitTest {
     @Test
     fun `batchUpdate throws for unknown field name`() {
         val exception = assertThrows(IllegalArgumentException::class.java) {
-            kotlinx.coroutines.runBlocking {
+            runBlocking {
                 service.batchUpdate(SimpleTestEntity::class.java, listOf(1L), "nonExistentField", "x")
             }
         }
@@ -1146,7 +1159,7 @@ class GenericCrudServiceUnitTest {
     @Test
     fun `batchUpdate throws for field not present on entity`() {
         val exception = assertThrows(IllegalArgumentException::class.java) {
-            kotlinx.coroutines.runBlocking {
+            runBlocking {
                 service.batchUpdate(SimpleTestEntity::class.java, listOf(1L, 2L), "birthDate", "2000-01-01")
             }
         }
@@ -1238,12 +1251,12 @@ class CustomerLikeEntity {
 @PortalEntity(label = "Extended Types Test", module = "Test")
 class ExtendedTypesEntity {
     var id: Long = 0
-    var birthDate: java.time.LocalDate? = null
-    var createdAt: java.time.LocalDateTime? = null
-    var externalId: java.util.UUID? = null
-    var bigNumber: java.math.BigInteger? = null
-    var eventTime: java.time.Instant? = null
-    var meetingTime: java.time.ZonedDateTime? = null
+    var birthDate: LocalDate? = null
+    var createdAt: LocalDateTime? = null
+    var externalId: UUID? = null
+    var bigNumber: BigInteger? = null
+    var eventTime: Instant? = null
+    var meetingTime: ZonedDateTime? = null
 }
 
 // ═══ Soft delete test fixtures ═══════════════════════════════════════════════
