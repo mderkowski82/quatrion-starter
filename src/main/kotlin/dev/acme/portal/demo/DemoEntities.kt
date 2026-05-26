@@ -2,7 +2,6 @@ package dev.acme.portal.demo
 
 import dev.quatrion.portal.annotation.*
 import jakarta.persistence.*
-import dev.quatrion.portal.annotation.Regex
 
 // ─────────────────────────────────────────────────────────────
 //  Tab enums
@@ -90,9 +89,9 @@ enum class ProductTag {
 @Entity
 @Table(
     indexes = [
-        jakarta.persistence.Index(name = "idx_demo_country_code",      columnList = "code"),
-        jakarta.persistence.Index(name = "idx_demo_country_continent", columnList = "continent"),
-        jakarta.persistence.Index(name = "idx_demo_country_is_eu",     columnList = "is_eu")
+        Index(name = "idx_demo_country_code",      columnList = "code"),
+        Index(name = "idx_demo_country_continent", columnList = "continent"),
+        Index(name = "idx_demo_country_is_eu",     columnList = "is_eu")
     ]
 )
 @PortalEntity(
@@ -136,7 +135,7 @@ class DemoCountry {
         order = 3,
         renderer = RendererType.SELECT,
         filterType = FilterType.IN,
-        selectEnum = _root_ide_package_.dev.acme.portal.demo.Continent::class
+        selectEnum = Continent::class
     )
     var continent: dev.acme.portal.demo.Continent? = null
 
@@ -159,8 +158,8 @@ class DemoCountry {
 @Entity
 @Table(
     indexes = [
-        jakarta.persistence.Index(name = "idx_demo_category_is_active", columnList = "is_active"),
-        jakarta.persistence.Index(name = "idx_demo_category_parent_id", columnList = "parent_id")
+        Index(name = "idx_demo_category_is_active", columnList = "is_active"),
+        Index(name = "idx_demo_category_parent_id", columnList = "parent_id")
     ]
 )
 @PortalEntity(
@@ -226,11 +225,11 @@ class DemoCategory {
 @Entity
 @Table(
     indexes = [
-        jakarta.persistence.Index(name = "idx_demo_customer_type",        columnList = "customer_type"),
-        jakarta.persistence.Index(name = "idx_demo_customer_is_active",   columnList = "is_active"),
-        jakarta.persistence.Index(name = "idx_demo_customer_registered",  columnList = "registered_at"),
-        jakarta.persistence.Index(name = "idx_demo_customer_country_id",  columnList = "country_id"),
-        jakarta.persistence.Index(name = "idx_demo_customer_category_id", columnList = "category_id")
+        Index(name = "idx_demo_customer_type",        columnList = "customer_type"),
+        Index(name = "idx_demo_customer_is_active",   columnList = "is_active"),
+        Index(name = "idx_demo_customer_registered",  columnList = "registered_at"),
+        Index(name = "idx_demo_customer_country_id",  columnList = "country_id"),
+        Index(name = "idx_demo_customer_category_id", columnList = "category_id")
     ]
 )
 @PortalEntity(
@@ -239,14 +238,14 @@ class DemoCategory {
     icon = "users",
     order = 3,
     description = "Główna encja klientów — pokrywa wszystkie typy pól i relacji",
-    tabs = _root_ide_package_.dev.acme.portal.demo.CustomerTab::class,
+    tabs = CustomerTab::class,
     pageSize = 20
 )
 @PortalAction(
     name = "activate",
     label = "Aktywuj",
     icon = "check-circle",
-    handler = _root_ide_package_.dev.acme.portal.demo.ActivateCustomerHandler::class,
+    handler = ActivateCustomerHandler::class,
     confirmMessage = "Czy aktywować tego klienta?",
     order = 1,
     variant = "default"
@@ -255,7 +254,7 @@ class DemoCategory {
     name = "deactivate",
     label = "Dezaktywuj",
     icon = "x-circle",
-    handler = _root_ide_package_.dev.acme.portal.demo.DeactivateCustomerHandler::class,
+    handler = DeactivateCustomerHandler::class,
     confirmMessage = "Czy dezaktywować tego klienta?",
     order = 2,
     variant = "destructive"
@@ -264,7 +263,7 @@ class DemoCategory {
     name = "sendWelcomeEmail",
     label = "Wyślij e-mail powitalny",
     icon = "mail",
-    handler = _root_ide_package_.dev.acme.portal.demo.SendEmailHandler::class,
+    handler = SendEmailHandler::class,
     order = 3,
     variant = "outline",
     bulkAllowed = true
@@ -297,7 +296,7 @@ class DemoCustomer {
         renderer = RendererType.SELECT,
         filterType = FilterType.IN,
         placeholder = "Wybierz typ",
-        selectEnum = _root_ide_package_.dev.acme.portal.demo.CustomerType::class
+        selectEnum = CustomerType::class
     )
     var customerType: dev.acme.portal.demo.CustomerType? = null
 
@@ -409,7 +408,7 @@ class DemoCustomer {
         filterType = FilterType.EXACT,
         showInTable = false
     )
-    @PortalRelation(targetEntity = _root_ide_package_.dev.acme.portal.demo.DemoCountry::class, editable = true, displayFields = ["name", "code"], searchFields = ["name", "code"])
+    @PortalRelation(targetEntity = DemoCountry::class, editable = true, displayFields = ["name", "code"], searchFields = ["name", "code"])
     var countryId: Long? = null
 
     // ── FINANCIAL tab ──────────────────────────────────────
@@ -478,7 +477,7 @@ class DemoCustomer {
         filterType = FilterType.IN,
         showInTable = false,
         tooltip = "Wartości oddzielone przecinkiem, np. VIP,NEW,REGULAR",
-        selectEnum = _root_ide_package_.dev.acme.portal.demo.CustomerTag::class
+        selectEnum = CustomerTag::class
     )
     @PortalDependency(
         field = "customerType",
@@ -522,7 +521,7 @@ class DemoCustomer {
         filterType = FilterType.EXACT,
         showInTable = false
     )
-    @PortalRelation(targetEntity = _root_ide_package_.dev.acme.portal.demo.DemoCategory::class, editable = true, displayFields = ["name"], searchFields = ["name"])
+    @PortalRelation(targetEntity = DemoCategory::class, editable = true, displayFields = ["name"], searchFields = ["name"])
     var categoryId: Long? = null
 
     // ── SYSTEM tab ─────────────────────────────────────────
@@ -588,7 +587,7 @@ class DemoCustomer {
     var customField: String = ""
 
 
-    @jakarta.persistence.Transient
+    @Transient
     @PortalField(
         label = "Zamówienia",
         tab = "SYSTEM",
@@ -600,11 +599,10 @@ class DemoCustomer {
         tooltip = "Lista zamówień powiązanych z klientem"
     )
     @PortalRelation(
-        targetEntity = _root_ide_package_.dev.acme.portal.demo.DemoOrder::class,
+        targetEntity = DemoOrder::class,
         editable = false,
         displayFields = ["orderNumber", "orderDate", "totalAmount", "status"],
         searchFields = ["orderNumber"],
-        labelField = "orderNumber"
     )
     var orders: List<dev.acme.portal.demo.DemoOrder>? = null
 
@@ -615,7 +613,7 @@ class DemoCustomer {
      * `ALTER TABLE ... ADD COLUMN version bigint not null default 0` (no NPE on existing rows).
      */
     @Column(columnDefinition = "bigint not null default 0")
-    @jakarta.persistence.Version
+    @Version
     var version: Long = 0
 }
 
@@ -629,11 +627,11 @@ class DemoCustomer {
 @Entity
 @Table(
     indexes = [
-        jakarta.persistence.Index(name = "idx_demo_order_status",       columnList = "status"),
-        jakarta.persistence.Index(name = "idx_demo_order_customer_id",  columnList = "customer_id"),
-        jakarta.persistence.Index(name = "idx_demo_order_date",         columnList = "order_date"),
-        jakarta.persistence.Index(name = "idx_demo_order_total_amount", columnList = "total_amount"),
-        jakarta.persistence.Index(name = "idx_demo_order_is_priority",  columnList = "is_priority")
+        Index(name = "idx_demo_order_status",       columnList = "status"),
+        Index(name = "idx_demo_order_customer_id",  columnList = "customer_id"),
+        Index(name = "idx_demo_order_date",         columnList = "order_date"),
+        Index(name = "idx_demo_order_total_amount", columnList = "total_amount"),
+        Index(name = "idx_demo_order_is_priority",  columnList = "is_priority")
     ]
 )
 @PortalEntity(
@@ -642,15 +640,15 @@ class DemoCustomer {
     icon = "shopping-cart",
     order = 4,
     description = "Zamówienia klientów z pozycjami",
-    tabs = _root_ide_package_.dev.acme.portal.demo.OrderTab::class,
+    tabs = OrderTab::class,
     pageSize = 15
 )
 @PortalAction(
     name = "processOrder",
     label = "Przetwórz zamówienie",
     icon = "play",
-    handler = _root_ide_package_.dev.acme.portal.demo.ProcessOrderHandler::class,
-    formModel = _root_ide_package_.dev.acme.portal.demo.ProcessOrderForm::class,
+    handler = ProcessOrderHandler::class,
+    formModel = ProcessOrderForm::class,
     confirmMessage = "Czy przetworzyć zamówienie?",
     order = 1
 )
@@ -658,7 +656,7 @@ class DemoCustomer {
     name = "cancelOrder",
     label = "Anuluj zamówienie",
     icon = "x",
-    handler = _root_ide_package_.dev.acme.portal.demo.CancelOrderHandler::class,
+    handler = CancelOrderHandler::class,
     confirmMessage = "Czy na pewno anulować zamówienie? Operacji nie można cofnąć.",
     order = 2,
     variant = "destructive"
@@ -714,7 +712,7 @@ class DemoOrder {
         order = 4,
         renderer = RendererType.SELECT,
         filterType = FilterType.IN,
-        selectEnum = _root_ide_package_.dev.acme.portal.demo.OrderStatus::class
+        selectEnum = OrderStatus::class
     )
     var status: dev.acme.portal.demo.OrderStatus? = null
 
@@ -757,12 +755,12 @@ class DemoOrder {
         renderer = RendererType.RELATION,
         filterType = FilterType.EXACT
     )
-    @PortalRelation(targetEntity = _root_ide_package_.dev.acme.portal.demo.DemoCustomer::class, editable = true, displayFields = ["name", "email"], searchFields = ["name", "email"])
+    @PortalRelation(targetEntity = DemoCustomer::class, editable = true, displayFields = ["name", "email"], searchFields = ["name", "email"])
     var customerId: Long? = null
 
     // ── ITEMS tab ──────────────────────────────────────────
 
-    @jakarta.persistence.Transient
+    @Transient
     @PortalField(
         label = "Pozycje zamówienia",
         tab = "ITEMS",
@@ -773,7 +771,7 @@ class DemoOrder {
         showInFilter = false
     )
     @PortalRelation(
-        targetEntity = _root_ide_package_.dev.acme.portal.demo.DemoOrderItem::class,
+        targetEntity = DemoOrderItem::class,
         editable = true,
         inlineEdit = true,
         displayFields = ["productId", "quantity", "unitPrice"],
@@ -783,7 +781,7 @@ class DemoOrder {
 
     /** JPA optimistic locking — see DemoCustomer.version for details. */
     @Column(columnDefinition = "bigint not null default 0")
-    @jakarta.persistence.Version
+    @Version
     var version: Long = 0
 }
 
@@ -795,8 +793,8 @@ class DemoOrder {
 @Entity
 @Table(
     indexes = [
-        jakarta.persistence.Index(name = "idx_demo_order_item_order_id",   columnList = "order_id"),
-        jakarta.persistence.Index(name = "idx_demo_order_item_product_id", columnList = "product_id")
+        Index(name = "idx_demo_order_item_order_id",   columnList = "order_id"),
+        Index(name = "idx_demo_order_item_product_id", columnList = "product_id")
     ]
 )
 @PortalEntity(
@@ -820,7 +818,7 @@ class DemoOrderItem {
         renderer = RendererType.RELATION,
         filterType = FilterType.EXACT
     )
-    @PortalRelation(targetEntity = _root_ide_package_.dev.acme.portal.demo.DemoOrder::class, editable = false, displayFields = ["orderNumber"], searchFields = ["orderNumber"])
+    @PortalRelation(targetEntity = DemoOrder::class, editable = false, displayFields = ["orderNumber"], searchFields = ["orderNumber"])
     var orderId: Long? = null
 
     @Column
@@ -830,7 +828,7 @@ class DemoOrderItem {
         renderer = RendererType.RELATION,
         filterType = FilterType.EXACT
     )
-    @PortalRelation(targetEntity = _root_ide_package_.dev.acme.portal.demo.DemoProduct::class, editable = true, displayFields = ["name", "sku"], searchFields = ["name", "sku"])
+    @PortalRelation(targetEntity = DemoProduct::class, editable = true, displayFields = ["name", "sku"], searchFields = ["name", "sku"])
     var productId: Long? = null
 
     @Column
@@ -873,10 +871,10 @@ class DemoOrderItem {
 @Entity
 @Table(
     indexes = [
-        jakarta.persistence.Index(name = "idx_demo_product_is_active",   columnList = "is_active"),
-        jakarta.persistence.Index(name = "idx_demo_product_price",       columnList = "price"),
-        jakarta.persistence.Index(name = "idx_demo_product_quantity",    columnList = "quantity"),
-        jakarta.persistence.Index(name = "idx_demo_product_category_id", columnList = "category_id")
+        Index(name = "idx_demo_product_is_active",   columnList = "is_active"),
+        Index(name = "idx_demo_product_price",       columnList = "price"),
+        Index(name = "idx_demo_product_quantity",    columnList = "quantity"),
+        Index(name = "idx_demo_product_category_id", columnList = "category_id")
     ]
 )
 @PortalEntity(
@@ -885,7 +883,7 @@ class DemoOrderItem {
     icon = "package",
     order = 1,
     description = "Produkty w katalogu — pokrywa dodatkowe typy pól",
-    tabs = _root_ide_package_.dev.acme.portal.demo.ProductTab::class,
+    tabs = ProductTab::class,
     pageSize = 30
 )
 class DemoProduct {
@@ -958,7 +956,7 @@ class DemoProduct {
         renderer = RendererType.RELATION,
         filterType = FilterType.EXACT
     )
-    @PortalRelation(targetEntity = _root_ide_package_.dev.acme.portal.demo.DemoCategory::class, editable = true, displayFields = ["name"], searchFields = ["name"])
+    @PortalRelation(targetEntity = DemoCategory::class, editable = true, displayFields = ["name"], searchFields = ["name"])
     var categoryId: Long? = null
 
     // ── DETAILS tab ────────────────────────────────────────
@@ -994,7 +992,7 @@ class DemoProduct {
         filterType = FilterType.IN,
         showInTable = false,
         tooltip = "Wartości oddzielone przecinkiem, np. ELEKTRONIKA,PREMIUM",
-        selectEnum = _root_ide_package_.dev.acme.portal.demo.ProductTag::class
+        selectEnum = ProductTag::class
     )
     var tags: String = ""
 
@@ -1007,7 +1005,7 @@ class DemoProduct {
         filterType = FilterType.EXACT,
         showInTable = false
     )
-    @PortalRelation(targetEntity = _root_ide_package_.dev.acme.portal.demo.DemoCountry::class, editable = true, displayFields = ["name", "code"], searchFields = ["name"])
+    @PortalRelation(targetEntity = DemoCountry::class, editable = true, displayFields = ["name", "code"], searchFields = ["name"])
     var countryId: Long? = null
 
     @Column
@@ -1019,7 +1017,7 @@ class DemoProduct {
         filterType = FilterType.EXACT,
         showInTable = false
     )
-    @PortalRelation(targetEntity = _root_ide_package_.dev.acme.portal.demo.DemoSupplier::class, editable = true, displayFields = ["name"], searchFields = ["name"])
+    @PortalRelation(targetEntity = DemoSupplier::class, editable = true, displayFields = ["name"], searchFields = ["name"])
     var supplierId: Long? = null
 
     // ── MEDIA tab ──────────────────────────────────────────
@@ -1080,8 +1078,8 @@ class DemoProduct {
 @Entity
 @Table(
     indexes = [
-        jakarta.persistence.Index(name = "idx_demo_supplier_is_verified", columnList = "is_verified"),
-        jakarta.persistence.Index(name = "idx_demo_supplier_rating",      columnList = "rating")
+        Index(name = "idx_demo_supplier_is_verified", columnList = "is_verified"),
+        Index(name = "idx_demo_supplier_rating",      columnList = "rating")
     ]
 )
 @PortalEntity(
@@ -1150,6 +1148,6 @@ class DemoSupplier {
 
     /** JPA optimistic locking — see DemoCustomer.version for details. */
     @Column(columnDefinition = "bigint not null default 0")
-    @jakarta.persistence.Version
+    @Version
     var version: Long = 0
 }

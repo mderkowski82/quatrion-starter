@@ -564,7 +564,7 @@ JPA entity
 | `RendererType.RELATION` | ManyToOne, OneToOne — stores a **single** foreign key | `var xyzId: Long? = null` |
 | `RendererType.RELATION_LIST` | OneToMany, ManyToMany — list of related entities | `@Transient var items: List<Entity>? = null` |
 
-> **Important for `RELATION_LIST`:** The field must be annotated with `@jakarta.persistence.Transient` — it is not a database column. It exists solely to carry metadata to the frontend. The backend dynamically loads related records based on `RelationMetadata`.
+> **Important for `RELATION_LIST`:** The field must be annotated with `@Transient` — it is not a database column. It exists solely to carry metadata to the frontend. The backend dynamically loads related records based on `RelationMetadata`.
 
 ---
 
@@ -905,7 +905,7 @@ enum class RelationRowAction(val actionName: String) {
 
 **Example — file list with download button:**
 ```kotlin
-@jakarta.persistence.Transient
+@Transient
 @PortalField(label = "Files", renderer = RendererType.RELATION_LIST, showInFilter = false, showInTable = false)
 @PortalRelation(
     targetEntity = TaskRunFile::class,
@@ -1036,7 +1036,7 @@ var regionId: Long? = null
 
 **5. Read-only `RELATION_LIST` (customer's orders):**
 ```kotlin
-@jakarta.persistence.Transient
+@Transient
 @PortalField(
     label = "Orders",
     tab = "SYSTEM",
@@ -1059,7 +1059,7 @@ var orders: List<DemoOrder>? = null
 
 **6. Inline-editable `RELATION_LIST` with limit (order items):**
 ```kotlin
-@jakarta.persistence.Transient
+@Transient
 @PortalField(
     label = "Order Items",
     tab = "ITEMS",
@@ -1160,7 +1160,7 @@ var xyzId: Long? = null
 | Mistake | Effect | Fix |
 |---|---|---|
 | Missing `@PortalLookup` on a RELATION field | Frontend uses defaults `name`/`id` for label/value fields | Always add `@PortalLookup` |
-| `RELATION_LIST` without `@Transient` | Hibernate tries to map the collection as a column — startup error | Add `@jakarta.persistence.Transient` |
+| `RELATION_LIST` without `@Transient` | Hibernate tries to map the collection as a column — startup error | Add `@Transient` |
 | `filterQuery` using an alias other than `e` | HQL runtime error | Always use `e.fieldName` |
 | `dependsOn` refers to a non-existent field | Cascading filter silently does nothing | Double-check the exact field name (case-sensitive) |
 | `showInFilter = true` on `RELATION_LIST` | Relation lists cannot be filtered — nonsensical | Set `showInFilter = false` |

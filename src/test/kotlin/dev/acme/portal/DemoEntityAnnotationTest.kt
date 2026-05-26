@@ -253,7 +253,7 @@ class DemoEntityAnnotationTest {
             .forEach { field ->
                 assertNotNull(
                     field.getAnnotation(Transient::class.java),
-                    "${clazz.simpleName}.${field.name} is RELATION_LIST but lacks @jakarta.persistence.Transient"
+                    "${clazz.simpleName}.${field.name} is RELATION_LIST but lacks @Transient"
                 )
             }
     }

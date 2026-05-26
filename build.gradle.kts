@@ -5,9 +5,7 @@ plugins {
 }
 
 group = "dev.quatrion"
-version = "0.0.6"
-
-val quatrionPortalVersion = "0.0.4"
+val quatrionPortalVersion = "0.0.7"
 
 repositories {
     mavenLocal()

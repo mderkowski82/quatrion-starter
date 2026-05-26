@@ -68,18 +68,18 @@ class DemoModuleConfig : PortalModuleConfig() {
         labelKey = "module.crm",
         icon = "users",
         order = 1,
-        defaultEntity = _root_ide_package_.dev.acme.portal.demo.DemoCustomer::class.java,
+        defaultEntity = DemoCustomer::class.java,
         entities = listOf(
             // ── Group: Słowniki ──────────────────────────────
-            EntityRef(entityClass = _root_ide_package_.dev.acme.portal.demo.DemoCountry::class.java,  group = "Słowniki", order = 1),
-            EntityRef(entityClass = _root_ide_package_.dev.acme.portal.demo.DemoCategory::class.java, group = "Słowniki", order = 2),
+            EntityRef(entityClass = DemoCountry::class.java,  group = "Słowniki", order = 1),
+            EntityRef(entityClass = DemoCategory::class.java, group = "Słowniki", order = 2),
 
             // ── Group: Klienci ───────────────────────────────
-            EntityRef(entityClass = _root_ide_package_.dev.acme.portal.demo.DemoCustomer::class.java, group = "Klienci",  order = 1),
+            EntityRef(entityClass = DemoCustomer::class.java, group = "Klienci",  order = 1),
 
             // ── Ungrouped ────────────────────────────────────
-            EntityRef(entityClass = _root_ide_package_.dev.acme.portal.demo.DemoOrder::class.java,     order = 10),
-            EntityRef(entityClass = _root_ide_package_.dev.acme.portal.demo.DemoOrderItem::class.java, order = 11)
+            EntityRef(entityClass = DemoOrder::class.java,     order = 10),
+            EntityRef(entityClass = DemoOrderItem::class.java, order = 11)
         )
     )
 
@@ -95,13 +95,13 @@ class DemoModuleConfig : PortalModuleConfig() {
         labelKey = "module.catalog",
         icon = "package",
         order = 2,
-        defaultEntity = _root_ide_package_.dev.acme.portal.demo.DemoProduct::class.java,
+        defaultEntity = DemoProduct::class.java,
         entities = listOf(
             // ── Group: Produkty ──────────────────────────────
-            EntityRef(entityClass = _root_ide_package_.dev.acme.portal.demo.DemoProduct::class.java, group = "Produkty", order = 1),
+            EntityRef(entityClass = DemoProduct::class.java, group = "Produkty", order = 1),
 
             // ── Ungrouped ────────────────────────────────────
-            EntityRef(entityClass = _root_ide_package_.dev.acme.portal.demo.DemoSupplier::class.java, order = 10)
+            EntityRef(entityClass = DemoSupplier::class.java, order = 10)
         )
     )
 

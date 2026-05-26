@@ -564,7 +564,7 @@ Encja JPA
 | `RendererType.RELATION` | ManyToOne, OneToOne — przechowujesz **jeden** klucz obcy | `var xyzId: Long? = null` |
 | `RendererType.RELATION_LIST` | OneToMany, ManyToMany — lista powiązanych encji | `@Transient var items: List<Entity>? = null` |
 
-> **Ważne dla `RELATION_LIST`:** Pole musi być oznaczone `@jakarta.persistence.Transient` — nie jest kolumną bazodanową. Służy wyłącznie do przekazania metadanych do frontendu. Backend dynamicznie ładuje powiązane rekordy na podstawie `RelationMetadata`.
+> **Ważne dla `RELATION_LIST`:** Pole musi być oznaczone `@Transient` — nie jest kolumną bazodanową. Służy wyłącznie do przekazania metadanych do frontendu. Backend dynamicznie ładuje powiązane rekordy na podstawie `RelationMetadata`.
 
 ---
 
@@ -905,7 +905,7 @@ enum class RelationRowAction(val actionName: String) {
 
 **Przykład — lista plików z przyciskiem pobierania:**
 ```kotlin
-@jakarta.persistence.Transient
+@Transient
 @PortalField(label = "Pliki", renderer = RendererType.RELATION_LIST, showInFilter = false, showInTable = false)
 @PortalRelation(
     targetEntity = TaskRunFile::class,
@@ -1036,7 +1036,7 @@ var regionId: Long? = null
 
 **5. `RELATION_LIST` tylko do odczytu (zamówienia klienta):**
 ```kotlin
-@jakarta.persistence.Transient
+@Transient
 @PortalField(
     label = "Zamówienia",
     tab = "SYSTEM",
@@ -1059,7 +1059,7 @@ var orders: List<DemoOrder>? = null
 
 **6. `RELATION_LIST` edytowalny inline z limitem (pozycje zamówienia):**
 ```kotlin
-@jakarta.persistence.Transient
+@Transient
 @PortalField(
     label = "Pozycje zamówienia",
     tab = "ITEMS",
@@ -1160,7 +1160,7 @@ var xyzId: Long? = null
 | Błąd | Skutek | Rozwiązanie |
 |---|---|---|
 | Brak `@PortalLookup` na polu z `RELATION` | Frontend nie zna `labelField`/`valueField`, używa domyślnych `name`/`id` | Zawsze dodaj `@PortalLookup` |
-| `RELATION_LIST` bez `@Transient` | Hibernate próbuje mapować kolekcję jako kolumnę — błąd startu | Dodaj `@jakarta.persistence.Transient` |
+| `RELATION_LIST` bez `@Transient` | Hibernate próbuje mapować kolekcję jako kolumnę — błąd startu | Dodaj `@Transient` |
 | `filterQuery` z aliasem innym niż `e` | Błąd HQL w runtime | Zawsze używaj `e.nazwaPolaDocelowego` |
 | `dependsOn` wskazuje na nieistniejące pole | Filtr kaskadowy nie działa, brak błędu | Sprawdź dokładną nazwę pola (case-sensitive) |
 | `showInFilter = true` na `RELATION_LIST` | Nie ma sensu — listy relacji nie filtrujemy | Ustaw `showInFilter = false` |

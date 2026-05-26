@@ -57,8 +57,8 @@ class TransientTestEntity {
  * @kotlin.jvm.Transient sets the Java `transient` modifier on the backing field,
  * which causes entityToMap to skip it (Modifier.isTransient == true).
  *
- * NOTE: Combining @JvmField + @jakarta.persistence.Transient does NOT set the Java
- * transient bit — @jakarta.persistence.Transient is a JPA marker only.  To get a
+ * NOTE: Combining @JvmField + @Transient does NOT set the Java
+ * transient bit — @Transient is a JPA marker only.  To get a
  * genuinely transient JVM field in Kotlin you need @kotlin.jvm.Transient.
  */
 @PortalEntity(label = "Kotlin Transient Test", module = "Test")
@@ -111,7 +111,7 @@ class GenericCrudServiceUnitTest {
 
     @Test
     fun `entityToMap includes Jakarta @Transient annotated fields`() {
-        // @jakarta.persistence.Transient does NOT set the Java transient bit,
+        // @Transient does NOT set the Java transient bit,
         // so entityToMap must include the field.
         val entity = TransientTestEntity().apply { id = 10; name = "X"; computed = "calc" }
         val map = mapper.entityToMap(entity)
