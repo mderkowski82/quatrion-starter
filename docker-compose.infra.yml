@@ -65,6 +65,9 @@ services:
       KC_HOSTNAME_URL: "http://host.docker.internal:8180"
       KC_HOSTNAME_STRICT: "false"
       KC_HOSTNAME_STRICT_HTTPS: "false"
+      # Realm import resolves ${env.VAR:default} in client secrets
+      KEYCLOAK_FRONTEND_SECRET: ${KEYCLOAK_FRONTEND_SECRET:-quatrion-frontend-dev-secret}
+      KEYCLOAK_BACKEND_SECRET: ${KEYCLOAK_BACKEND_SECRET:-quatrion-backend-dev-secret}
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
       KC_DB_USERNAME: ${PORTAL_DB_USER:-portal}
