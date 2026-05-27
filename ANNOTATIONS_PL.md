@@ -2035,7 +2035,7 @@ class Customer {
 
     // Soft-delete — wymagane gdy softDelete = true w @PortalEntity
     @Column
-    @PortalField(label = "Usunięty", hidden = true)
+    @PortalField(label = "Usunięty", hidden = true, showInTable = false, showInFilter = false)
     var deleted: Boolean = false
 }
 ```

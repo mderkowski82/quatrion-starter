@@ -126,6 +126,6 @@ class Genre : AuditableEntity() {
 
     // Wymagane dla softDelete = true w @PortalEntity
     @Column(nullable = false)
-    @PortalField(label = "Usunięty", hidden = true)
+    @PortalField(label = "Usunięty", hidden = true, showInTable = false, showInFilter = false)
     var deleted: Boolean = false
 }

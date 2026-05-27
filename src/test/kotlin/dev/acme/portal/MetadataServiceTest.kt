@@ -10,6 +10,7 @@ import dev.quatrion.portal.config.PortalModuleConfig
 import dev.quatrion.portal.config.PortalUiConfig
 import dev.quatrion.portal.i18n.PortalI18nService
 import dev.quatrion.portal.license.LicenseVerifier
+import dev.quatrion.portal.model.DependencyConditionMetadata
 import dev.quatrion.portal.service.MetadataService
 import dev.quatrion.portal.task.AbstractTask
 import jakarta.enterprise.inject.Instance
@@ -1012,8 +1013,11 @@ class MetadataServiceTest {
         assertEquals(1, levelField.dependencies.size)
         assertEquals("SHOW", levelField.dependencies.first().visibility)
         assertEquals(listOf("MEDIUM", "HIGH"), levelField.dependencies.first().allowedValues)
-        assertEquals("mode", levelField.dependencies.first().condition.field)
-        assertEquals("ADVANCED", levelField.dependencies.first().condition.value)
+        val levelCondition = levelField.dependencies.first().condition
+        assertTrue(levelCondition is DependencyConditionMetadata.Leaf)
+        levelCondition as DependencyConditionMetadata.Leaf
+        assertEquals("mode", levelCondition.field)
+        assertEquals("ADVANCED", levelCondition.value)
 
         assertEquals("STATIC", scoreField.dependencies.first().min?.type)
         assertEquals(10.0, scoreField.dependencies.first().min?.value)
