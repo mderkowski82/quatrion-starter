@@ -41,7 +41,7 @@ Starter project for the **Quatrion Portal** framework — a rapid application de
 
 | Layer | Technology |
 |---|---|
-| Backend | Quarkus 3.23 + Kotlin 2.2 + Hibernate Reactive |
+| Backend | Quarkus 3.33 + Kotlin 2.3 + Hibernate Reactive |
 | Frontend | Next.js (Docker image from `ghcr.io`) |
 | Auth | Keycloak 25 (OIDC / JWT) |
 | Database | PostgreSQL 16 |
@@ -151,14 +151,41 @@ FRONTEND_VERSION=latest
 See all available tags at:
 https://github.com/mderkowski82/quatrion-saas/pkgs/container/quatrion-portal-frontend
 
+## Framework Version (Quatrion Portal artifacts)
+
+The starter consumes the framework from **Maven Central** — no local build needed:
+
+```kotlin
+// build.gradle.kts (default — do not change)
+val quatrionPortalVersion = "latest"
+```
+
+- `latest` is a floating alias, always pointing at the newest GitHub Release
+  (published automatically by `release.yml` in `quatrion-saas` alongside the
+  CalVer version). You always get the newest release without bumping versions.
+- To pin a specific release instead: `val quatrionPortalVersion = "2026.03.30-1422"`.
+
+### Emergency mode (offline only)
+
+If you have no access to Maven Central (offline work, testing an unpublished
+local framework change), publish SNAPSHOT artifacts to your local `~/.m2`:
+
+```bat
+:: from the aggregator root
+build-and-publish-local.bat
+```
+
+then temporarily set `val quatrionPortalVersion = "1.0.0-SNAPSHOT"`.
+This is a marked **exception**, not the default path.
+
 ## Keycloak Dev Credentials
 
-Default dev accounts (from `keycloak/realm-export.json`):
+Default dev accounts (from `keycloak/realm-export.json` — the only source of truth):
 
 | User | Password | Role |
 |---|---|---|
-| `admin@example.com` | `admin123` | `portal-admin` |
-| `user@example.com` | `user123` | `portal-user` |
+| `test-admin` (`test-admin@quatrion.local`) | `Test@dmin123` | `portal-admin` |
+| `test-user` (`test-user@quatrion.local`) | `Test@dmin123` | `portal-user` |
 
 ## Project Structure
 
