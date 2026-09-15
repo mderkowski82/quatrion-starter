@@ -16,8 +16,6 @@ repositories {
     mavenCentral()
 }
 
-
-
 dependencies {
     // Quatrion Portal framework (domyslnie: alias "latest" z Maven Central)
     implementation(enforcedPlatform("dev.quatrion:quatrion-portal-bom:${quatrionPortalVersion}"))
