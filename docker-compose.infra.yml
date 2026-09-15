@@ -2,18 +2,23 @@
 # quatrion-starter — Hybrid dev mode (backend from IntelliJ/Gradle, rest in Docker)
 #
 # Use this when developing the backend locally (./gradlew quarkusDev or IntelliJ run config).
-# Starts: PostgreSQL + Keycloak + Frontend (Docker image)
-# Backend runs on the host machine.
+# Starts: PostgreSQL + Keycloak + S3-compatible storage (Zenko)
+# Backend runs on the host machine; frontend runs via quatrion-frontend (npm run dev)
+# or from the full-stack docker-compose.yml image.
+#
+# NOTE: this file does NOT start a frontend service — only infra.
+# The canonical host-dev infra is quatrion-saas/docker-compose.infra.yml;
+# this variant is kept for starter-local runs.
 #
 # Usage:
 #   docker compose -f docker-compose.infra.yml up -d
 #   # then run backend from IntelliJ or: ./gradlew quarkusDev
 #
 # URLs:
-#   Frontend   : http://localhost:3000
 #   Backend    : http://localhost:8080  (run locally)
 #   Keycloak   : http://localhost:8180  (or http://host.docker.internal:8180)
 #   PostgreSQL : localhost:5432
+#   Zenko S3   : http://localhost:8000
 # =============================================================================
 
 services:

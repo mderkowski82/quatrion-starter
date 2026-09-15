@@ -41,7 +41,7 @@ Starter projektu dla frameworka **Quatrion Portal** — platforma do szybkiego t
 
 | Warstwa | Technologia |
 |---|---|
-| Backend | Quarkus 3.23 + Kotlin 2.2 + Hibernate Reactive |
+| Backend | Quarkus 3.33 + Kotlin 2.3 + Hibernate Reactive |
 | Frontend | Next.js (obraz Docker z `ghcr.io`) |
 | Autentykacja | Keycloak 25 (OIDC / JWT) |
 | Baza danych | PostgreSQL 16 |
@@ -151,14 +151,41 @@ FRONTEND_VERSION=latest
 Wszystkie dostępne tagi:
 https://github.com/mderkowski82/quatrion-saas/pkgs/container/quatrion-portal-frontend
 
+## Wersja frameworka (artefakty Quatrion Portal)
+
+Starter pobiera framework z **Maven Central** — lokalne budowanie nie jest potrzebne:
+
+```kotlin
+// build.gradle.kts (domyslnie — nie zmieniaj)
+val quatrionPortalVersion = "latest"
+```
+
+- `latest` to plynny alias, zawsze wskazujacy najnowsze wydanie GitHub Release
+  (publikowane automatycznie przez `release.yml` w `quatrion-saas` rownolegle
+  z wersja CalVer). Zawsze dostajesz najnowsze wydanie bez podbijania wersji.
+- Aby przypiac konkretne wydanie: `val quatrionPortalVersion = "2026.03.30-1422"`.
+
+### Tryb awaryjny (tylko offline)
+
+Gdy nie masz dostepu do Maven Central (praca offline, test nieopublikowanej
+lokalnej zmiany frameworka), opublikuj artefakty SNAPSHOT do lokalnego `~/.m2`:
+
+```bat
+:: z katalogu agregatora
+build-and-publish-local.bat
+```
+
+i tymczasowo ustaw `val quatrionPortalVersion = "1.0.0-SNAPSHOT"`.
+To oznaczony **wyjatek**, nie domyslna droga.
+
 ## Domyślne konta deweloperskie Keycloak
 
-Konta deweloperskie (z `keycloak/realm-export.json`):
+Konta deweloperskie (z `keycloak/realm-export.json` — jedynego zrodla prawdy):
 
 | Użytkownik | Hasło | Rola |
 |---|---|---|
-| `admin@example.com` | `admin123` | `portal-admin` |
-| `user@example.com` | `user123` | `portal-user` |
+| `test-admin` (`test-admin@quatrion.local`) | `Test@dmin123` | `portal-admin` |
+| `test-user` (`test-user@quatrion.local`) | `Test@dmin123` | `portal-user` |
 
 ## Struktura projektu
 

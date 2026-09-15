@@ -5,7 +5,11 @@ plugins {
 }
 
 group = "dev.quatrion"
-val quatrionPortalVersion = "1.0.0-SNAPSHOT"
+// Domyslnie: najnowsze wydanie z Maven Central (alias "latest", patrz release.yml
+// w quatrion-saas — publikuje rownolegle wersje CalVer i alias "latest").
+// Wyjatek awaryjny (brak dostepu do Central): lokalna publikacja SNAPSHOT
+// przez build-and-publish-local.bat — patrz README, sekcja "Tryb awaryjny".
+val quatrionPortalVersion = "latest"
 
 repositories {
     mavenLocal()
@@ -15,7 +19,7 @@ repositories {
 
 
 dependencies {
-    // Quatrion Portal framework (local build)
+    // Quatrion Portal framework (domyslnie: alias "latest" z Maven Central)
     implementation(enforcedPlatform("dev.quatrion:quatrion-portal-bom:${quatrionPortalVersion}"))
     implementation("dev.quatrion:quatrion-portal-annotations:${quatrionPortalVersion}")
     implementation("dev.quatrion:quatrion-portal-runtime:${quatrionPortalVersion}")
@@ -58,6 +62,12 @@ dependencies {
 }
 
 java {
+    // Kanoniczny toolchain: Temurin 21 (Foojay z settings.gradle.kts dociaga
+    // dystrybucje automatycznie — build nie zalezy od lokalnego JDK).
+    toolchain {
+        languageVersion.set(JavaLanguageVersion.of(21))
+        vendor.set(JvmVendorSpec.ADOPTIUM)
+    }
     sourceCompatibility = JavaVersion.VERSION_21
     targetCompatibility = JavaVersion.VERSION_21
 }
