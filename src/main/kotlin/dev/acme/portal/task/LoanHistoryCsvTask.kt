@@ -17,8 +17,7 @@ enum class LoanHistoryCsvTaskTab(
     override val order: Int
 ) : PortalTab {
     DEFAULT("Ogólne", "cog", 0),
-    PARAMS("Parametry", "settings", 1),
-    HISTORY("Historia uruchomień", "history", 2)
+    PARAMS("Parametry", "settings", 1)
 }
 
 // ─── Encja zadania ────────────────────────────────────────────────────────────
@@ -36,7 +35,10 @@ enum class LoanHistoryCsvTaskTab(
  * Anulowanie aktywnego [TaskRun] odbywa się przez akcję `cancelRun` na encji [TaskRun].
  */
 @Entity
-@Table(name = "loan_history_csv_task")
+@Table(
+    name = "loan_history_csv_task",
+    indexes = [Index(name = "idx_loan_csv_task_member", columnList = "member_id")]
+)
 @PortalEntity(
     label = "Zadanie: Historia wypożyczeń CSV",
     module = "Zadania",
@@ -70,10 +72,11 @@ class LoanHistoryCsvTask : AbstractTask(), PanacheEntityBase {
     // ── Parametry zadania (zakładka PARAMS) ──────────────────────────────────
 
     /**
-     * ID czytelnika — opcjonalne. Gdy null → eksport dotyczy wszystkich członków.
+     * Czytelnik — opcjonalna asocjacja. Gdy null → eksport dotyczy wszystkich członków.
      * Relacja editable=true umożliwia wybór z listy.
      */
-    @Column
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "member_id")
     @PortalField(
         label = "Czytelnik",
         tab = "PARAMS",
@@ -92,7 +95,7 @@ class LoanHistoryCsvTask : AbstractTask(), PanacheEntityBase {
         filterQuery = "e.isActive = true AND e.deleted = false",
         maxResults = 100
     )
-    var memberId: Long? = null
+    var member: Member? = null
 
     @Column(nullable = false)
     @PortalField(
@@ -106,28 +109,5 @@ class LoanHistoryCsvTask : AbstractTask(), PanacheEntityBase {
         tooltip = "Czy eksportować wypożyczenia ze statusem OVERDUE"
     )
     var includeOverdue: Boolean = true
-
-    // ── Historia uruchomień (zakładka HISTORY) ────────────────────────────────
-    // parentField="taskRefId" + filter na taskRefType pozwoli frontendowi
-    // automatycznie pobrać TaskRun dla tego konkretnego zadania.
-    @Transient
-    @PortalField(
-        label = "Historia uruchomień",
-        tab = "HISTORY",
-        order = 20,
-        renderer = RendererType.RELATION_LIST,
-        filterType = FilterType.NONE,
-        showInTable = false,
-        showInFilter = false
-    )
-    @PortalRelation(
-        targetEntity = TaskRun::class,
-        editable = false,
-        inlineEdit = false,
-        displayFields = ["status", "startedBy", "startedAt", "finishedAt"],
-        maxItems = 50,
-        parentField = "taskRefId"
-    )
-    var taskRuns: List<TaskRun>? = null
 }
 

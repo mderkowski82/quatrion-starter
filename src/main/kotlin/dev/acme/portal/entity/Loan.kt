@@ -88,9 +88,9 @@ class ExtendLoanHandler {
 }
 
 // ─── Encja: Wypożyczenie ──────────────────────────────────────────────────────
-// Demonstracja: DATETIME renderer, kaskadowy dropdown (genreId → bookId via dependsOn),
-// @PortalRelation editable=false (memberId tylko do odczytu),
-// @PortalRelation createAllowed=true (bookId),
+// Demonstracja: DATETIME renderer, kaskadowy dropdown (helper genre → book via dependsOn),
+// @PortalRelation editable=false (member tylko do odczytu),
+// @PortalRelation createAllowed=true (book),
 // @PortalDependency: SHOW (returnDate tylko gdy RETURNED),
 //                   SHOW (notes tylko gdy OVERDUE, clearOnHide=true),
 //                   HIDE (renewalCount gdy ACTIVE),
@@ -99,6 +99,13 @@ class ExtendLoanHandler {
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Entity
+@Table(
+    indexes = [
+        Index(name = "idx_loan_member_id", columnList = "member_id"),
+        Index(name = "idx_loan_book_id", columnList = "book_id"),
+        Index(name = "idx_loan_status", columnList = "status")
+    ]
+)
 @PortalEntity(
     label = "Wypożyczenie",
     labelKey = "entity.loan",
@@ -148,7 +155,8 @@ class Loan : AuditableEntity() {
     var id: Long = 0
 
     // Relacja do Czytelnika — zablokowana (editable=false), nie można zmienić po utworzeniu
-    @Column(nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "member_id", nullable = false)
     @PortalField(
         label = "Czytelnik", labelKey = "field.loan.memberId",
         order = 1, required = true,
@@ -165,12 +173,14 @@ class Loan : AuditableEntity() {
         filterQuery = "e.isActive = true AND e.deleted = false",
         maxResults = 50
     )
-    var memberId: Long? = null
+    var member: Member? = null
 
     // ─── Kaskadowy dropdown: Gatunek filtruje listę Książek ──────────────────
-    // genreId jest pomocniczym polem @Transient — wartość nie jest persystowana.
-    // Frontend przekazuje ją jako dependsOn do endpointu /lookup Książek.
-
+    // genre jest pomocniczym polem @Transient typu Long — wartość nie jest persystowana.
+    // Typ celowo skalarny (nie asocjacja): dzięki temu weryfikacja celu przy zapisie
+    // (checkRelationTargets) je pomija. Nazwa jest celowo identyczna z polem asocjacji
+    // Book.genre, po którym backend filtruje lookup (e.genre.id = :depVal),
+    // a frontend czyta nią wartość pomocniczego pickera (dependsOn).
     @Transient
     @PortalField(
         label = "Filtruj po gatunku (pomocnicze)", labelKey = "field.loan.genreFilter",
@@ -190,11 +200,12 @@ class Loan : AuditableEntity() {
         filterQuery = "e.isActive = true",
         maxResults = 200
     )
-    var genreId: Long? = null
+    var genre: Long? = null
 
-    // bookId korzysta z dependsOn="genreId" — backend generuje: AND e.genreId = :genreId
+    // book korzysta z dependsOn="genre" — backend generuje: AND e.genre.id = :depVal
     // Dzięki temu lista książek jest filtrowana do wybranego gatunku
-    @Column(nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "book_id", nullable = false)
     @PortalField(
         label = "Książka", labelKey = "field.loan.bookId",
         order = 3, required = true,
@@ -210,10 +221,10 @@ class Loan : AuditableEntity() {
         createAllowed = false,
         labelField = "title",
         filterQuery = "e.isActive = true AND e.status = 'AVAILABLE'",
-        dependsOn = "genreId",
+        dependsOn = "genre",
         maxResults = 50
     )
-    var bookId: Long? = null
+    var book: Book? = null
 
     @Formula("(SELECT b.title FROM book b WHERE b.id = book_id)")
     @PortalField(
@@ -223,7 +234,7 @@ class Loan : AuditableEntity() {
         filterType = FilterType.NONE,
         readonly = true,
         showInFilter = false,
-        tooltip = "Tytuł książki — pobierany automatycznie na podstawie bookId",
+        tooltip = "Tytuł książki — pobierany automatycznie z powiązanej książki",
         tooltipKey = "tooltip.loan.bookTitle"
     )
     var bookTitle: String = ""
@@ -238,7 +249,7 @@ class Loan : AuditableEntity() {
         readonly = true,
         showInFilter = false,
         showInTable = false,
-        tooltip = "Imię i nazwisko czytelnika — pobierane automatycznie na podstawie memberId",
+        tooltip = "Imię i nazwisko czytelnika — pobierane automatycznie z powiązanego czytelnika",
         tooltipKey = "tooltip.loan.memberName"
     )
     var memberName: String = ""
