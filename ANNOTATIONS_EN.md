@@ -236,6 +236,7 @@ annotation class PortalField(
     val hidden: Boolean = false,
     val showInTable: Boolean = true,
     val showInFilter: Boolean = true,
+    val showInForm: Boolean = true,
     val required: Boolean = false,
     val placeholder: String = "",
     val tooltip: String = "",
@@ -271,6 +272,7 @@ annotation class PortalField(
 | `hidden` | `Boolean` | `false` | Field is excluded from both the table and form (for internal/system fields) |
 | `showInTable` | `Boolean` | `true` | Whether the field appears as a column in the entity list table |
 | `showInFilter` | `Boolean` | `true` | Whether the field appears in the filter panel |
+| `showInForm` | `Boolean` | `true` | Whether the field appears in the create/edit form (derived labels that would go stale stay table-only) |
 | `required` | `Boolean` | `false` | Validation: field must be non-empty before saving |
 | `placeholder` | `String` | `""` | Placeholder text shown inside empty input fields |
 | `tooltip` | `String` | `""` | Short help text displayed near the input field |

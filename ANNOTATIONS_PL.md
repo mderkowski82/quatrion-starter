@@ -236,6 +236,7 @@ annotation class PortalField(
     val hidden: Boolean = false,
     val showInTable: Boolean = true,
     val showInFilter: Boolean = true,
+    val showInForm: Boolean = true,
     val required: Boolean = false,
     val placeholder: String = "",
     val tooltip: String = "",
@@ -271,6 +272,7 @@ annotation class PortalField(
 | `hidden` | `Boolean` | `false` | Pole ukryte zarówno w tabeli jak i formularzu (np. pola systemowe) |
 | `showInTable` | `Boolean` | `true` | Czy pole jest kolumną w tabeli encji |
 | `showInFilter` | `Boolean` | `true` | Czy pole pojawia się w panelu filtrów |
+| `showInForm` | `Boolean` | `true` | Czy pole pojawia się w formularzu (pochodne etykiety, które by się dezaktualizowały, zostają tylko w tabeli) |
 | `required` | `Boolean` | `false` | Walidacja: pole obowiązkowe przed zapisem |
 | `placeholder` | `String` | `""` | Tekst placeholder w pustym polu input |
 | `tooltip` | `String` | `""` | Krótka pomoc kontekstowa wyświetlana przy polu |

@@ -234,6 +234,9 @@ class Loan : AuditableEntity() {
         filterType = FilterType.NONE,
         readonly = true,
         showInFilter = false,
+        // Derived label duplicating the book picker: keep in the table,
+        // hide in the form where it would go stale on book change.
+        showInForm = false,
         tooltip = "Tytuł książki — pobierany automatycznie z powiązanej książki",
         tooltipKey = "tooltip.loan.bookTitle"
     )
