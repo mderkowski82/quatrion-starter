@@ -15,7 +15,7 @@
    - [RendererType — typy rendererów](#rendererytype--typy-rendererów)
    - [FilterType — strategie filtrowania](#filtertype--strategie-filtrowania)
 5. [@Regex — walidacja wzorcem](#5-regex--walidacja-wzorcem)
-6. [@PortalRelation + @PortalLookup — relacje](#6-portalrelation--portallookup--relacje)
+6. [@PortalRelation — relacje](#6-portalrelation--relacje)
 7. [@PortalDependency — reguły warunkowe](#7-portaldependency--reguły-warunkowe)
 8. [@PortalAction + @PortalFormField — akcje niestandardowe](#8-portalaction--portalformfield--akcje-niestandardowe)
 9. [@PortalSecurity — kontrola dostępu](#9-portalsecurity--kontrola-dostępu)
@@ -236,6 +236,7 @@ annotation class PortalField(
     val hidden: Boolean = false,
     val showInTable: Boolean = true,
     val showInFilter: Boolean = true,
+    val showInForm: Boolean = true,
     val required: Boolean = false,
     val placeholder: String = "",
     val tooltip: String = "",
@@ -271,6 +272,7 @@ annotation class PortalField(
 | `hidden` | `Boolean` | `false` | Pole ukryte zarówno w tabeli jak i formularzu (np. pola systemowe) |
 | `showInTable` | `Boolean` | `true` | Czy pole jest kolumną w tabeli encji |
 | `showInFilter` | `Boolean` | `true` | Czy pole pojawia się w panelu filtrów |
+| `showInForm` | `Boolean` | `true` | Czy pole pojawia się w formularzu (pochodne etykiety, które by się dezaktualizowały, zostają tylko w tabeli) |
 | `required` | `Boolean` | `false` | Walidacja: pole obowiązkowe przed zapisem |
 | `placeholder` | `String` | `""` | Tekst placeholder w pustym polu input |
 | `tooltip` | `String` | `""` | Krótka pomoc kontekstowa wyświetlana przy polu |
@@ -299,8 +301,8 @@ annotation class PortalField(
 | `BOOLEAN` | Checkbox / toggle | Typ Kotlin: `Boolean` |
 | `SELECT` | Dropdown z jedną wartością | Wymaga `selectOptions` lub `selectEnum` |
 | `MULTI_SELECT` | Dropdown z wieloma wartościami | Wartości oddzielone przecinkiem w bazie |
-| `RELATION` | Picker relacji ManyToOne / OneToOne | Wymaga `@PortalRelation` + `@PortalLookup` |
-| `RELATION_LIST` | Lista inline OneToMany / ManyToMany | Wymaga `@PortalRelation` + `@PortalLookup` |
+| `RELATION` | Picker relacji ManyToOne / OneToOne | Wymaga asocjacji JPA + `@PortalRelation` |
+| `RELATION_LIST` | Lista inline OneToMany | Wymaga `@OneToMany(mappedBy = ...)` + `@PortalRelation` |
 | `PASSWORD` | Pole hasła (wartość maskowana) | Nie pojawia się w tabeli |
 | `EMAIL` | Pole e-mail z walidacją formatu | — |
 | `URL` | Pole URL z walidacją formatu | — |
@@ -518,25 +520,29 @@ var nip: String = ""
 
 ---
 
-## 6. `@PortalRelation` + `@PortalLookup` — relacje
+## 6. `@PortalRelation` — relacje
+
+Każda relacja panelu istnieje jako **asocjacja JPA** — jedyne źródło prawdy (R1). `@PortalRelation` deklaruje **wyłącznie prezentację** (plus zgodne nadpisanie celu i egzekwowany znacznik kasowania); sama nigdy relacji nie tworzy. Umieszczenie jej na surowym kluczu liczbowym albo na liście `@Transient` bez asocjacji jest nielegalne i zatrzymuje build.
 
 ---
 
 ### Jak to działa — przepływ danych
 
-Obie adnotacje **muszą być umieszczone razem** na tym samym polu. Przy starcie serwera `MetadataService` łączy je w jeden obiekt `RelationMetadata`, który jest wysyłany do frontendu jako część metadanych pola.
-
-```
-Encja JPA
-  @PortalField(renderer = RELATION)   ← mówi frontendowi "renderuj picker"
-  @PortalRelation(targetEntity = ...)  ← mówi jak wyświetlać i jaką encję powiązać
-  @PortalLookup(labelField = ...)      ← mówi jak wywołać endpoint /lookup
-  var countryId: Long? = null
+```kotlin
+@ManyToOne(fetch = FetchType.LAZY)
+@JoinColumn(name = "country_id")
+@PortalField(renderer = RendererType.RELATION, ...)   ← mówi frontendowi "renderuj picker"
+@PortalRelation(                                       ← prezentacja: etykiety, filtry pickera
+    displayFields = ["name", "code"],
+    searchFields = ["name", "code"],
+    labelField = "name"
+)
+var country: DemoCountry? = null                      ← asocjacja JPA = prawda
          │
          ▼ MetadataService (startup)
          │
   RelationMetadata {
-    targetEntity  = "Country"          ← prosta nazwa klasy
+    targetEntity  = "DemoCountry"     ← wywiedzione z typu asocjacji
     labelField    = "name"
     valueField    = "id"
     displayFields = ["name", "code"]
@@ -548,12 +554,14 @@ Encja JPA
          │
          ▼ JSON → /api/portal/metadata → frontend
          │
-  Tabela:  RelationCell  →  GET /api/portal/data/Country/{id}
+  Tabela:  RelationCell  →  GET /api/portal/data/DemoCountry/{id}
                              wyświetla wartość pola "name" wybranego rekordu
          │
-  Formularz: RelationRenderer  →  GET /api/portal/data/Country/lookup?q=pol&labelField=name&valueField=id
+  Formularz: RelationRenderer  →  GET /api/portal/data/DemoCountry/lookup?q=pol&labelField=name&valueField=id
                                    dropdown z wynikami wyszukiwania
 ```
+
+Na drucie asocjacja podróżuje jako skalar id celu (`"country": 42`); wiązanie po identyfikatorze nie odsłania mechaniki sesji (R6). Formularz wiąże wybór relacji przez identyfikator celu.
 
 ---
 
@@ -561,10 +569,10 @@ Encja JPA
 
 | Renderer | Kiedy używać | Pole w encji |
 |---|---|---|
-| `RendererType.RELATION` | ManyToOne, OneToOne — przechowujesz **jeden** klucz obcy | `var xyzId: Long? = null` |
-| `RendererType.RELATION_LIST` | OneToMany, ManyToMany — lista powiązanych encji | `@Transient var items: List<Entity>? = null` |
+| `RendererType.RELATION` | ManyToOne, OneToOne — **pojedynczy** powiązany rekord (strona właściciela, trzyma FK) | `@ManyToOne var country: DemoCountry? = null` + `@JoinColumn` |
+| `RendererType.RELATION_LIST` | OneToMany — lista powiązanych encji (strona odwrotna, wywiedziona z mapowania właściciela) | `@OneToMany(mappedBy = "customer") var orders: List<DemoOrder>? = null` |
 
-> **Ważne dla `RELATION_LIST`:** Pole musi być oznaczone `@Transient` — nie jest kolumną bazodanową. Służy wyłącznie do przekazania metadanych do frontendu. Backend dynamicznie ładuje powiązane rekordy na podstawie `RelationMetadata`.
+> **Ważne dla `RELATION_LIST`:** Pole musi być kolekcją `@OneToMany` z `mappedBy` wskazującym asocjację właściciela — nigdy `@Transient`. Lista dzieci wywodzi się ze strony odwrotnej, nie z ręcznego klucza rodzica. Wiele-do-wielu modeluj wyłącznie jawną encją linkującą z dwiema obowiązkowymi asocjacjami `@ManyToOne` (bez niejawnego `@JoinTable`).
 
 ---
 
@@ -584,26 +592,37 @@ annotation class PortalRelation(
     val orderBy: String = "",
     val maxItems: Int = 0,
     val downloadAction: String = "",
-    val actions: Array<RelationRowAction> = []
+    val actions: Array<RelationRowAction> = [],
+    // --- prezentacja pickera ---
+    val labelField: String = "name",
+    val valueField: String = "id",
+    val filterQuery: String = "",
+    val dependsOn: String = "",
+    val maxResults: Int = 100,
+    val parentField: String = ""
 )
 ```
 
 #### `targetEntity: KClass<*> = Unit::class`
 
-Klasa docelowej encji JPA. Gdy ustawiona (inaczej niż `Unit::class`), framework używa jej prostej nazwy (`simpleName`) jako identyfikatora encji przy wywołaniach endpointów.
+Zgodne nadpisanie celu relacji **wyłącznie**. Cel i typ relacji wywodzą się z asocjacji JPA; ustawienie tu konkretnej klasy encji jest dopuszczalne tylko gdy zgadza się z typem asocjacji (rozjazd zatrzymuje build).
 
-**Kiedy można pominąć?** Framework próbuje sam wywnioskować docelową encję:
+**Kiedy można pominąć?** Framework wywodzi cel:
 - Dla kolekcji (`List<T>`) — z argumentu generycznego `T`
-- Dla referencji (`var xyzId: Long?`) — z nazwy pola (konwencja `xyzId` → `Xyz`)
+- Dla asocjacji to-one — z typu pola
 
-W praktyce zawsze lepiej jawnie podać `targetEntity`, aby uniknąć niejednoznaczności.
+W praktyce jawne ustawienie `targetEntity` dokumentuje intencję; skoro jest — musi być zgodne.
 
 ```kotlin
-// ✅ Jawnie podana docelowa encja — zalecane
+// ✅ Jawnie podana docelowa encja zgodna z asocjacją — zalecane
+@ManyToOne(fetch = FetchType.LAZY)
+@JoinColumn(name = "country_id")
 @PortalRelation(targetEntity = DemoCountry::class, ...)
+var country: DemoCountry? = null
 
-// ⚠️ Bez targetEntity — framework próbuje wywnioskować z List<DemoOrderItem>
-@PortalRelation(displayFields = ["productId", "quantity"])
+// ✅ Cel wywiedziony z typu elementu kolekcji
+@OneToMany(mappedBy = "order", fetch = FetchType.LAZY)
+@PortalRelation(displayFields = ["product", "quantity"])
 var items: List<DemoOrderItem>? = null
 ```
 
@@ -615,12 +634,14 @@ Pola docelowej encji wyświetlane jako **kolumny w tabeli** w trybie `RELATION_L
 
 ```kotlin
 // Picker pokaże "Marek Kowalski (mk@example.com)"
+@ManyToOne(fetch = FetchType.LAZY)
+@JoinColumn(name = "customer_id")
 @PortalRelation(
     targetEntity = DemoCustomer::class,
     displayFields = ["name", "email"],  // obie kolumny w liście
     searchFields = ["name", "email"]
 )
-var customerId: Long? = null
+var customer: DemoCustomer? = null
 ```
 
 Gdy `displayFields = []` (domyślnie), frontend sam dobierze widoczne kolumny na podstawie `showInTable` z metadanych docelowej encji.
@@ -648,17 +669,19 @@ Podaj te pola, po których wyszukiwanie ma sens (typowo `name`, `code`, `email`)
 
 #### `editable: Boolean = true`
 
-Gdy `false` — picker jest zablokowany (tylko do odczytu w formularzu). Przydatne np. dla pola `orderId` w pozycji zamówienia — ID zamówienia nie powinno być zmieniane z poziomu dziecka.
+Gdy `false` — picker jest zablokowany (tylko do odczytu w formularzu). Przydatne np. dla pola `order` w pozycji zamówienia — zamówienie nie powinno być zmieniane z poziomu dziecka.
 
 ```kotlin
 // Zamówienie - pole tylko do odczytu (nadrzędne względem pozycji)
+@ManyToOne(fetch = FetchType.LAZY)
+@JoinColumn(name = "order_id")
 @PortalRelation(
     targetEntity = DemoOrder::class,
     editable = false,          // blokuje picker
     displayFields = ["orderNumber"],
     searchFields = ["orderNumber"]
 )
-var orderId: Long? = null
+var order: DemoOrder? = null
 ```
 
 ---
@@ -668,11 +691,12 @@ var orderId: Long? = null
 Tylko dla `RELATION_LIST`. Gdy `true`, rekordy powiązane można edytować bezpośrednio w tabeli wewnątrz formularza rodzica, bez otwierania osobnego modalu.
 
 ```kotlin
+@OneToMany(mappedBy = "order", fetch = FetchType.LAZY)
 @PortalRelation(
     targetEntity = DemoOrderItem::class,
     editable = true,
     inlineEdit = true,         // edycja bezpośrednio w tabeli pozycji
-    displayFields = ["productId", "quantity", "unitPrice"],
+    displayFields = ["product", "quantity", "unitPrice"],
     maxItems = 100
 )
 var items: List<DemoOrderItem>? = null
@@ -685,20 +709,33 @@ var items: List<DemoOrderItem>? = null
 Gdy `true`, picker pokazuje opcję **"Utwórz nowy"**. Użytkownik może otworzyć formularz tworzenia docelowej encji bezpośrednio z poziomu pickera, bez przechodzenia do oddzielnej strony.
 
 ```kotlin
+@ManyToOne(fetch = FetchType.LAZY)
+@JoinColumn(name = "supplier_id")
 @PortalRelation(
     targetEntity = DemoSupplier::class,
     displayFields = ["name"],
     searchFields = ["name"],
     createAllowed = true       // "Dodaj nowego dostawcę" w pickerze
 )
-var supplierId: Long? = null
+var supplier: DemoSupplier? = null
 ```
 
 ---
 
 #### `cascadeDelete: Boolean = false`
 
-Wyłącznie informacyjny — nie konfiguruje rzeczywistego kaskadowania. Gdy `true`, frontend może wyświetlić ostrzeżenie przy usuwaniu rodzica. **Kaskadę JPA należy skonfigurować osobno** w mapowaniu JPA (`cascade = CascadeType.REMOVE`).
+Egzekwowany znacznik kasowania, nie podpowiedź informacyjna. Efektywna semantyka kasowania wywodzi się z asocjacji domenowej: bez deklaracji kaskady usunięcie rodzica z powiązanymi wierszami jest **blokowane** (`409 Conflict`); ustaw `true` tylko aby zadeklarować intencję kaskady, która musi mieć pokrycie w mapowaniu JPA (`cascade = REMOVE`/`ALL` lub orphan removal) i w więzach bazy. Rozjazd znacznika z mapowaniem JPA zatrzymuje build — tak samo samokaskada.
+
+```kotlin
+// Członek z kaskadowymi wypożyczeniami (kaskada JPA WYMAGANA obok znacznika)
+@OneToMany(mappedBy = "member", fetch = FetchType.LAZY, cascade = [CascadeType.REMOVE])
+@PortalRelation(
+    targetEntity = Loan::class,
+    cascadeDelete = true,        // pokryte przez cascade = REMOVE powyżej
+    ...
+)
+var loans: List<Loan>? = null
+```
 
 ---
 
@@ -707,15 +744,17 @@ Wyłącznie informacyjny — nie konfiguruje rzeczywistego kaskadowania. Gdy `tr
 Fragment HQL `ORDER BY` (bez słowa kluczowego `ORDER BY`) stosowany przy ładowaniu listy relacji. Alias encji to `e`.
 
 ```kotlin
+@ManyToOne(fetch = FetchType.LAZY)
+@JoinColumn(name = "category_id")
 @PortalRelation(
     targetEntity = DemoCategory::class,
     displayFields = ["name"],
     orderBy = "name ASC"       // lista kategorii posortowana alfabetycznie
 )
-var categoryId: Long? = null
+var category: DemoCategory? = null
 ```
 
-Gdy puste, backend sortuje po `labelField` (z `@PortalLookup`) rosnąco.
+Gdy puste, backend sortuje po `labelField` rosnąco.
 
 ---
 
@@ -725,20 +764,9 @@ Maksymalna liczba elementów w `RELATION_LIST`. Gdy `0` (domyślnie) — bez ogr
 
 ---
 
-### `@PortalLookup` — szczegółowy opis parametrów
+### Prezentacja pickera — `labelField`, `valueField`, `filterQuery`, `dependsOn`, `maxResults`, `parentField`
 
-```kotlin
-@Target(AnnotationTarget.FIELD, AnnotationTarget.FUNCTION)
-@Retention(AnnotationRetention.RUNTIME)
-annotation class PortalLookup(
-    val labelField: String = "name",
-    val valueField: String = "id",
-    val filterQuery: String = "",
-    val dependsOn: String = "",
-    val maxResults: Int = 100,
-    val parentField: String = ""
-)
-```
+Pozostałe parametry `@PortalRelation` opisują sposób wołania endpointu `/lookup`. Odrębna adnotacja fallback została usunięta — każdy atrybut lookup musi być zadeklarowany na `@PortalRelation`.
 
 #### `labelField: String = "name"`
 
@@ -749,22 +777,22 @@ Pole docelowej encji wyświetlane jako **czytelna etykieta** w pickerze i w kom�
 
 ```kotlin
 // Tabela pokaże wartość pola "name" kraju, np. "Polska"
-@PortalLookup(labelField = "name", valueField = "id")
+@PortalRelation(labelField = "name", valueField = "id")
 
 // Tabela pokaże wartość pola "orderNumber", np. "ORD-2024-001"
-@PortalLookup(labelField = "orderNumber", valueField = "id")
+@PortalRelation(labelField = "orderNumber", valueField = "id")
 ```
 
 ---
 
 #### `valueField: String = "id"`
 
-Pole docelowej encji, którego **wartość jest przechowywana** w kolumnie encji rodzica (klucz obcy). Domyślnie `"id"` — zazwyczaj nie trzeba zmieniać, chyba że relacja jest po innym polu unikalnym.
+Pole docelowej encji, którego **wartość jest zapisywana** przy wyborze elementu relacji (typowo klucz główny). Domyślnie `"id"` — zazwyczaj nie trzeba zmieniać, chyba że relacja jest po innym polu unikalnym.
 
 ```kotlin
-// FK przechowuje wartość pola "code" zamiast "id"
-@PortalLookup(labelField = "name", valueField = "code")
-var countryCode: String? = null
+// Lookup zapisuje kod ISO "code" zamiast liczbowego "id"
+@PortalRelation(labelField = "name", valueField = "code")
+var country: DemoCountry? = null
 ```
 
 ---
@@ -783,54 +811,53 @@ Wewnętrzny HQL zapytania:
 
 ```kotlin
 // Tylko aktywne kategorie
-@PortalLookup(filterQuery = "e.isActive = true")
+@PortalRelation(filterQuery = "e.isActive = true")
 
 // Tylko kraje z kontynentu europejskiego
-@PortalLookup(filterQuery = "e.continent = 'EUROPE'")
+@PortalRelation(filterQuery = "e.continent = 'EUROPE'")
 
 // Tylko produkty na stanie
-@PortalLookup(filterQuery = "e.quantity > 0")
+@PortalRelation(filterQuery = "e.quantity > 0")
 
 // Wielokrotne warunki (AND)
-@PortalLookup(filterQuery = "e.isActive = true AND e.isVerified = true")
+@PortalRelation(filterQuery = "e.isActive = true AND e.isVerified = true")
 ```
 
-> **Ważne:** Alias encji w `filterQuery` musi być zawsze `e`. Nie dodawaj `WHERE` na początku.
+> **Ważne:** Alias encji w `filterQuery` musi być zawsze `e`. Nie dodawaj `WHERE` na początku. Tylko zawężanie pickera: `filterQuery` zawęża picker, nigdy ścieżkę zapisu — reguły, które muszą zachodzić przy wiązaniu, modeluj jako nazwane niezmienniki domenowe. Każde przywołane `e.pole` musi istnieć na encji docelowej (walidowane w build-time).
 
 ---
 
 #### `dependsOn: String = ""`
 
-Nazwa **innego pola tego samego formularza**, którego bieżąca wartość jest automatycznie przekazywana jako filtr do endpointu `/lookup`. Umożliwia tworzenie **kaskadowych dropdownów** — np. wybór kraju ogranicza listę dostępnych miast.
+Nazwa **innego pola tego samego formularza**, którego bieżąca wartość jest automatycznie przekazywana jako filtr do endpointu `/lookup`. Umożliwia tworzenie **kaskadowych dropdownów** — np. wybór gatunku ogranicza listę dostępnych książek.
 
 **Jak to działa technicznie:**
 
-1. Użytkownik wybiera wartość w polu `countryId` (np. `42`)
-2. Frontend re-wywołuje `/api/portal/data/City/lookup?dependsOnField=countryId&dependsOnValue=42`
-3. Backend dodaje do HQL: `AND e.countryId = :depVal`
-4. Tylko miasta przypisane do kraju o `id = 42` trafiają do dropdownu
+1. Użytkownik wybiera wartość w pomocniczym polu `genre` formularza Loan (np. `7`)
+2. Frontend re-wywołuje `/api/portal/data/Book/lookup?dependsOnField=genre&dependsOnValue=7`
+3. Backend dodaje do HQL: `AND e.genre.id = :depVal` (świadome asocjacji: `.id` dopisywane dla pól asocjacyjnych)
+4. Tylko książki przypisane do gatunku o `id = 7` trafiają do dropdownu
 
 ```kotlin
-// Pole źródłowe (kraj)
-@Column
-@PortalField(label = "Kraj", order = 5, renderer = RendererType.RELATION)
-@PortalRelation(targetEntity = DemoCountry::class, searchFields = ["name"])
-@PortalLookup(labelField = "name", valueField = "id")
-var countryId: Long? = null
+// Formularz Loan: pomocniczy picker (wartość NIE jest persystowana)
+@Transient
+@PortalField(label = "Filtruj po gatunku (pomocnicze)", order = 2, renderer = RendererType.RELATION, ...)
+@PortalRelation(targetEntity = Genre::class, searchFields = ["name"])
+var genre: Long? = null          // ta sama nazwa co asocjacja Book poniżej
 
-// Pole zależne (miasto filtrowane po wybranym kraju)
-@Column
-@PortalField(label = "Miasto", order = 6, renderer = RendererType.RELATION)
-@PortalRelation(targetEntity = City::class, searchFields = ["name"])
-@PortalLookup(
-    labelField = "name",
-    valueField = "id",
-    dependsOn = "countryId"    // nazwa pola na BIEŻĄCYM formularzu (nie tabeli!)
+// Formularz Loan: picker książki filtrowany wybranym gatunkiem
+@ManyToOne(fetch = FetchType.LAZY)
+@JoinColumn(name = "book_id", nullable = false)
+@PortalField(label = "Książka", order = 3, renderer = RendererType.RELATION)
+@PortalRelation(
+    targetEntity = Book::class,
+    searchFields = ["title", "isbn"],
+    dependsOn = "genre"          // pole formularza TEGO formularza I asocjacja na Book
 )
-var cityId: Long? = null
+var book: Book? = null
 ```
 
-> **Uwaga:** Pole docelowej encji filtrowanej (np. `City.countryId`) musi mieć taką samą nazwę jak pole wskazywane przez `dependsOn`. Backend generuje: `e.{dependsOn} = :depVal`.
+> **Uwaga:** `dependsOn` nazywa pole **bieżącego formularza** (helper powyżej), które musi dzielić nazwę z **asocjacją na encji docelowej** (`Book.genre`). Backend filtruje `e.{dependsOn}.id = :depVal` dla asocjacji, `e.{dependsOn} = :depVal` w pozostałych przypadkach. Pomocnicze pole `@Transient` z `@PortalRelation` jest legalne wyłącznie jako takie źródło `dependsOn`. `dependsOn` musi wskazywać istniejące pole bieżącej encji (walidowane w build-time).
 
 ---
 
@@ -840,10 +867,27 @@ Maksymalna liczba opcji zwracanych z endpointu `/lookup` w jednym żądaniu. Zmn
 
 ```kotlin
 // Mała tabela słownikowa — pokaż wszystkie opcje od razu
-@PortalLookup(labelField = "name", valueField = "id", maxResults = 500)
+@PortalRelation(labelField = "name", valueField = "id", maxResults = 500)
 
 // Duża tabela klientów — ogranicz wyniki podpowiedzi
-@PortalLookup(labelField = "name", valueField = "id", maxResults = 20)
+@PortalRelation(labelField = "name", valueField = "id", maxResults = 20)
+```
+
+---
+
+#### `parentField: String = ""`
+
+Tylko dla pól `RELATION_LIST`: nazwa pola w encji **docelowej**, które trzyma asocjację właściciela z powrotem do rodzica (np. `"member"` w `Loan`, gdy lista jest na `Member`). Gdy ustawione, frontend automatycznie pobiera powiązane rekordy przez `GET /api/portal/data/{targetEntity}?filter[parentField][eq]={parentId}` zamiast polegać na odpowiedzi `getById` encji rodzica. Puste oznacza brak auto-fetch.
+
+```kotlin
+// Formularz Member: historia wypożyczeń dociągana automatycznie przez Loan.member
+@OneToMany(mappedBy = "member", fetch = FetchType.LAZY)
+@PortalRelation(
+    targetEntity = Loan::class,
+    displayFields = ["bookTitle", "loanDate", "status"],
+    parentField = "member"     // asocjacja właściciela na Loan
+)
+var loans: List<Loan>? = null
 ```
 
 ---
@@ -879,17 +923,23 @@ Zwraca listę `LookupOption`:
 
 | Parametr | Typ | Domyślna | Opis |
 |---|---|---|---|
-| `targetEntity` | `KClass<*>` | `Unit::class` | Klasa docelowej encji JPA. Jawne podanie eliminuje niejednoznaczności |
+| `targetEntity` | `KClass<*>` | `Unit::class` | Zgodne nadpisanie celu relacji; niezgodność z asocjacją zatrzymuje build |
 | `editable` | `Boolean` | `true` | Czy pole relacji można modyfikować w formularzu |
 | `inlineEdit` | `Boolean` | `false` | Tylko `RELATION_LIST`: edycja elementów bezpośrednio w tabeli w formularzu rodzica |
 | `displayFields` | `Array<String>` | `[]` | Kolumny wyświetlane w tabeli `RELATION_LIST` lub dodatkowe info w pickerze |
 | `searchFields` | `Array<String>` | `[]` | Pola przeszukiwane gdy użytkownik wpisuje tekst w pickerze |
 | `createAllowed` | `Boolean` | `false` | Picker pokazuje opcję "Utwórz nowy" |
-| `cascadeDelete` | `Boolean` | `false` | Informacyjny: czy usuwanie rodzica kaskaduje na dzieci |
+| `cascadeDelete` | `Boolean` | `false` | Egzekwowany znacznik kasowania: `true` deklaruje kaskadę pokrytą mapowaniem JPA i więzami DB (rozjazd zatrzymuje build); `false` (domyślnie) blokuje usuwanie przy istniejących powiązaniach |
 | `orderBy` | `String` | `""` | Fragment HQL `ORDER BY` (bez słowa kluczowego), alias `e` |
 | `maxItems` | `Int` | `0` | Limit elementów w `RELATION_LIST` (0 = bez limitu) |
 | `downloadAction` | `String` | `""` | Nazwa `@PortalAction` na encji docelowej wywołującej pobieranie pliku. Gdy niepuste, renderowany jest przycisk ikony pobierania przy każdym wierszu `RELATION_LIST` |
 | `actions` | `Array<RelationRowAction>` | `[]` | Przyciski akcji per-wiersz w tabeli `RELATION_LIST` (patrz `RelationRowAction`) |
+| `labelField` | `String` | `"name"` | Pole docelowej encji wyświetlane jako etykieta w pickerze i tabeli |
+| `valueField` | `String` | `"id"` | Pole docelowej encji zapisywane jako wartość przy wyborze elementu |
+| `filterQuery` | `String` | `""` | Stały filtr HQL WHERE (alias `e.`), np. `"e.isActive = true"` — tylko zawężanie pickera |
+| `dependsOn` | `String` | `""` | Nazwa pola tego samego formularza — kaskadowy dropdown (musi nazywać też asocjację docelową) |
+| `maxResults` | `Int` | `100` | Maks. liczba opcji zwracanych przez `/lookup` |
+| `parentField` | `String` | `""` | Tylko `RELATION_LIST`: asocjacja właściciela na encji docelowej z powrotem do rodzica (np. `"member"` w `Loan`); włącza auto-fetch frontendu |
 
 #### `RelationRowAction` — predefiniowane akcje per-wiersz
 
@@ -905,51 +955,40 @@ enum class RelationRowAction(val actionName: String) {
 
 **Przykład — lista plików z przyciskiem pobierania:**
 ```kotlin
-@Transient
+@OneToMany(mappedBy = "taskRun", fetch = FetchType.LAZY)
 @PortalField(label = "Pliki", renderer = RendererType.RELATION_LIST, showInFilter = false, showInTable = false)
 @PortalRelation(
     targetEntity = TaskRunFile::class,
     editable = false,
-    displayFields = ["fileName", "fileSize"],
-    actions = [RelationRowAction.DOWNLOAD]   // przycisk pobierania przy każdym pliku
+    displayFields = ["fileName", "fileSizeBytes"],
+    actions = [RelationRowAction.DOWNLOAD],   // przycisk pobierania przy każdym pliku
+    labelField = "fileName",
+    valueField = "id",
+    parentField = "taskRun"
 )
-@PortalLookup(labelField = "fileName", valueField = "id", parentField = "taskRunId")
 var files: List<TaskRunFile>? = null
 ```
 
-#### `@PortalLookup`
-
-| Parametr | Typ | Domyślna | Opis |
-|---|---|---|---|
-| `labelField` | `String` | `"name"` | Pole docelowej encji wyświetlane jako etykieta w pickerze i tabeli |
-| `valueField` | `String` | `"id"` | Pole docelowej encji przechowywane jako wartość (klucz obcy) |
-| `filterQuery` | `String` | `""` | Stały filtr HQL WHERE (alias `e.`), np. `"e.isActive = true"` |
-| `dependsOn` | `String` | `""` | Nazwa pola tego samego formularza — kaskadowy dropdown |
-| `maxResults` | `Int` | `100` | Maks. liczba opcji zwracanych przez `/lookup` |
-| `parentField` | `String` | `""` | Tylko `RELATION_LIST`: nazwa pola w encji **docelowej**, które przechowuje FK do rodzica (np. `"memberId"` w `Loan` gdy lista jest na `Member`). Gdy ustawione, frontend automatycznie pobiera powiązane rekordy przez `GET /api/portal/data/{targetEntity}?filter[parentField][eq]={parentId}` zamiast polegać na odpowiedzi `getById` |
-
----
-
 ### Różnice: `displayFields` vs `searchFields` vs `labelField`
 
-| Właściwość | Adnotacja | Co robi |
-|---|---|---|
-| `labelField` | `@PortalLookup` | Pole pokazywane jako etykieta w komórce tabeli i opcji dropdownu |
-| `displayFields` | `@PortalRelation` | Kolumny wyświetlane w tabeli `RELATION_LIST` / dodatkowe info obok etykiety |
-| `searchFields` | `@PortalRelation` | Pola, po których działa wyszukiwanie po wpisaniu tekstu w pickerze |
+| Właściwość | Co robi |
+|---|---|
+| `labelField` | Pole pokazywane jako etykieta w komórce tabeli i opcji dropdownu |
+| `displayFields` | Kolumny wyświetlane w tabeli `RELATION_LIST` / dodatkowe info obok etykiety |
+| `searchFields` | Pola, po których działa wyszukiwanie po wpisaniu tekstu w pickerze |
 
 Typowy wzorzec — wszystkie trzy mogą być różne:
 ```kotlin
+@ManyToOne(fetch = FetchType.LAZY)
+@JoinColumn(name = "customer_id")
 @PortalRelation(
     targetEntity = DemoCustomer::class,
     displayFields = ["name", "email", "phone"],   // 3 kolumny w liście relacji
-    searchFields  = ["name", "email"]             // szukaj po imieniu i emailu
-)
-@PortalLookup(
-    labelField = "name",   // w komórce tabeli pokaż tylko imię
+    searchFields  = ["name", "email"],            // szukaj po imieniu i emailu
+    labelField = "name",                          // w komórce tabeli pokaż tylko imię
     valueField = "id"
 )
-var customerId: Long? = null
+var customer: DemoCustomer? = null
 ```
 
 ---
@@ -958,7 +997,8 @@ var customerId: Long? = null
 
 **1. Prosta relacja ManyToOne (kraj klienta):**
 ```kotlin
-@Column
+@ManyToOne(fetch = FetchType.LAZY)
+@JoinColumn(name = "country_id")
 @PortalField(
     label = "Kraj",
     tab = "CONTACT",
@@ -971,15 +1011,17 @@ var customerId: Long? = null
     targetEntity = DemoCountry::class,
     editable = true,
     displayFields = ["name", "code"],
-    searchFields = ["name", "code"]
+    searchFields = ["name", "code"],
+    labelField = "name",
+    valueField = "id"
 )
-@PortalLookup(labelField = "name", valueField = "id")
-var countryId: Long? = null
+var country: DemoCountry? = null
 ```
 
-**2. Relacja tylko do odczytu (orderId w pozycji zamówienia):**
+**2. Relacja tylko do odczytu (zamówienie w pozycji zamówienia):**
 ```kotlin
-@Column
+@ManyToOne(fetch = FetchType.LAZY)
+@JoinColumn(name = "order_id")
 @PortalField(
     label = "Zamówienie",
     order = 1,
@@ -990,53 +1032,52 @@ var countryId: Long? = null
     targetEntity = DemoOrder::class,
     editable = false,                              // zablokowany picker
     displayFields = ["orderNumber"],
-    searchFields = ["orderNumber"]
+    searchFields = ["orderNumber"],
+    labelField = "orderNumber",
+    valueField = "id"
 )
-@PortalLookup(labelField = "orderNumber", valueField = "id")
-var orderId: Long? = null
+var order: DemoOrder? = null
 ```
 
 **3. Relacja z filtrowaniem (tylko aktywne kategorie):**
 ```kotlin
-@Column
+@ManyToOne(fetch = FetchType.LAZY)
+@JoinColumn(name = "category_id")
 @PortalField(label = "Kategoria", order = 3, renderer = RendererType.RELATION)
 @PortalRelation(
     targetEntity = DemoCategory::class,
     displayFields = ["name"],
-    searchFields = ["name"]
-)
-@PortalLookup(
+    searchFields = ["name"],
     labelField = "name",
     valueField = "id",
     filterQuery = "e.isActive = true"             // stały filtr HQL
 )
-var categoryId: Long? = null
+var category: DemoCategory? = null
 ```
 
-**4. Kaskadowe dropdowny (kraj → kategoria powiązana z krajem):**
+**4. Kaskadowe dropdowny (gatunek → książka):**
 ```kotlin
-// Pole źródłowe
-@Column
-@PortalField(label = "Kraj", order = 5, renderer = RendererType.RELATION)
-@PortalRelation(targetEntity = DemoCountry::class, searchFields = ["name"])
-@PortalLookup(labelField = "name", valueField = "id")
-var countryId: Long? = null
+// Pole pomocnicze formularza Loan (wartość NIE jest persystowana)
+@Transient
+@PortalField(label = "Filtruj po gatunku (pomocnicze)", order = 2, renderer = RendererType.RELATION)
+@PortalRelation(targetEntity = Genre::class, searchFields = ["name"])
+var genre: Long? = null                          // ta sama nazwa co asocjacja Book
 
-// Pole zależne — filtrowane po wartości countryId
-@Column
-@PortalField(label = "Region", order = 6, renderer = RendererType.RELATION)
-@PortalRelation(targetEntity = Region::class, searchFields = ["name"])
-@PortalLookup(
-    labelField = "name",
-    valueField = "id",
-    dependsOn = "countryId"   // gdy countryId = 42, backend filtruje: e.countryId = 42
+// Pole zależne — filtrowane po wartości genre; backend filtruje: e.genre.id = 7
+@ManyToOne(fetch = FetchType.LAZY)
+@JoinColumn(name = "book_id", nullable = false)
+@PortalField(label = "Książka", order = 3, renderer = RendererType.RELATION)
+@PortalRelation(
+    targetEntity = Book::class,
+    searchFields = ["title", "isbn"],
+    dependsOn = "genre"
 )
-var regionId: Long? = null
+var book: Book? = null
 ```
 
 **5. `RELATION_LIST` tylko do odczytu (zamówienia klienta):**
 ```kotlin
-@Transient
+@OneToMany(mappedBy = "customer", fetch = FetchType.LAZY)
 @PortalField(
     label = "Zamówienia",
     tab = "SYSTEM",
@@ -1051,15 +1092,16 @@ var regionId: Long? = null
     targetEntity = DemoOrder::class,
     editable = false,                              // lista tylko do odczytu
     displayFields = ["orderNumber", "orderDate", "totalAmount", "status"],
-    searchFields = ["orderNumber"]
+    searchFields = ["orderNumber"],
+    labelField = "orderNumber",
+    valueField = "id"
 )
-@PortalLookup(labelField = "orderNumber", valueField = "id")
 var orders: List<DemoOrder>? = null
 ```
 
 **6. `RELATION_LIST` edytowalny inline z limitem (pozycje zamówienia):**
 ```kotlin
-@Transient
+@OneToMany(mappedBy = "order", fetch = FetchType.LAZY)
 @PortalField(
     label = "Pozycje zamówienia",
     tab = "ITEMS",
@@ -1073,48 +1115,51 @@ var orders: List<DemoOrder>? = null
     targetEntity = DemoOrderItem::class,
     editable = true,
     inlineEdit = true,                             // edycja bezpośrednio w tabeli
-    displayFields = ["productId", "quantity", "unitPrice"],
+    displayFields = ["product", "quantity", "unitPrice"],
     maxItems = 100,                                // max 100 pozycji
-    orderBy = "id ASC"
+    orderBy = "id ASC",
+    labelField = "id",
+    valueField = "id"
 )
-@PortalLookup(labelField = "productId", valueField = "id")
 var items: List<DemoOrderItem>? = null
 ```
 
 **7. Relacja z tworzeniem nowego rekordu w locie:**
 ```kotlin
-@Column
+@ManyToOne(fetch = FetchType.LAZY)
+@JoinColumn(name = "supplier_id")
 @PortalField(label = "Dostawca", order = 5, renderer = RendererType.RELATION)
 @PortalRelation(
     targetEntity = DemoSupplier::class,
     displayFields = ["name"],
     searchFields = ["name"],
-    createAllowed = true                          // "Dodaj nowego dostawcę" w pickerze
+    createAllowed = true,                          // "Dodaj nowego dostawcę" w pickerze
+    labelField = "name",
+    valueField = "id"
 )
-@PortalLookup(labelField = "name", valueField = "id")
-var supplierId: Long? = null
+var supplier: DemoSupplier? = null
 ```
 
 **8. Relacja z niestandardowym kluczem (nie `id`):**
 ```kotlin
-// Relacja po kodzie ISO zamiast numerycznego id
-@Column(length = 3)
+// Lookup zapisuje kod ISO zamiast numerycznego id
+@ManyToOne(fetch = FetchType.LAZY)
+@JoinColumn(name = "country_id")
 @PortalField(label = "Kraj (kod)", order = 4, renderer = RendererType.RELATION)
 @PortalRelation(
     targetEntity = DemoCountry::class,
     displayFields = ["name"],
-    searchFields = ["name", "code"]
-)
-@PortalLookup(
+    searchFields = ["name", "code"],
     labelField = "name",
     valueField = "code"                           // zapisuje kod ISO, nie id
 )
-var countryCode: String? = null
+var country: DemoCountry? = null
 ```
 
 **9. Samoreferencja (kategoria nadrzędna):**
 ```kotlin
-@Column
+@ManyToOne(fetch = FetchType.LAZY)
+@JoinColumn(name = "parent_id")
 @PortalField(
     label = "Kategoria nadrzędna",
     order = 5,
@@ -1126,10 +1171,11 @@ var countryCode: String? = null
     targetEntity = DemoCategory::class,           // ta sama klasa!
     editable = true,
     displayFields = ["name"],
-    searchFields = ["name"]
+    searchFields = ["name"],
+    labelField = "name",
+    valueField = "id"
 )
-@PortalLookup(labelField = "name", valueField = "id")
-var parentId: Long? = null
+var parent: DemoCategory? = null
 ```
 
 ---
@@ -1137,20 +1183,17 @@ var parentId: Long? = null
 ### Wymagana kolejność adnotacji na polu
 
 ```kotlin
-@Column(...)                    // 1. JPA
-@PortalField(                   // 2. Deklaracja pola UI
+@ManyToOne(...) / @OneToMany(...)   // 1. Asocjacja JPA (źródło prawdy)
+@JoinColumn(...)                    // 1b. Mapowanie FK (strona właściciela to-one)
+@PortalField(                       // 2. Deklaracja pola UI
     renderer = RendererType.RELATION,
     ...
 )
-@PortalRelation(                // 3. Konfiguracja relacji
+@PortalRelation(                    // 3. Prezentacja relacji + znacznik kasowania
     targetEntity = ...,
     ...
 )
-@PortalLookup(                  // 4. Konfiguracja lookup
-    labelField = "name",
-    valueField = "id"
-)
-var xyzId: Long? = null
+var country: DemoCountry? = null
 ```
 
 ---
@@ -1159,12 +1202,15 @@ var xyzId: Long? = null
 
 | Błąd | Skutek | Rozwiązanie |
 |---|---|---|
-| Brak `@PortalLookup` na polu z `RELATION` | Frontend nie zna `labelField`/`valueField`, używa domyślnych `name`/`id` | Zawsze dodaj `@PortalLookup` |
-| `RELATION_LIST` bez `@Transient` | Hibernate próbuje mapować kolekcję jako kolumnę — błąd startu | Dodaj `@Transient` |
+| `@PortalRelation` na surowym kluczu liczbowym bez asocjacji | Build zatrzymany (tabela legalności: surowy klucz bez asocjacji JPA) | Zamodeluj asocjację `@ManyToOne`/`@OneToOne`; adnotacje połóż na niej |
+| `RELATION_LIST` na `@Transient` zamiast `@OneToMany` | Build zatrzymany (brak mapowania strony odwrotnej) | Użyj `@OneToMany(mappedBy = "...")` wskazującego asocjację właściciela |
+| `@OneToMany` w `RELATION_LIST` bez `mappedBy` | Build zatrzymany (lista dzieci musi wywodzić się ze strony odwrotnej) | Dodaj `mappedBy` z nazwą pola właściciela |
+| `cascadeDelete = true` bez kaskady JPA | Build zatrzymany (znacznik musi mieć pokrycie w `cascade = REMOVE`/`ALL` lub orphan removal) | Dodaj kaskadę JPA — albo usuń znacznik i zaakceptuj blokowanie (domyślne) |
 | `filterQuery` z aliasem innym niż `e` | Błąd HQL w runtime | Zawsze używaj `e.nazwaPolaDocelowego` |
-| `dependsOn` wskazuje na nieistniejące pole | Filtr kaskadowy nie działa, brak błędu | Sprawdź dokładną nazwę pola (case-sensitive) |
+| `filterQuery` odwołuje się do nieistniejącego pola celu | Build zatrzymany (nieznane pole w zasięgu pickera) | Odwołuj się do istniejącego pola encji docelowej |
+| `dependsOn` wskazuje na nieistniejące pole formularza | Build zatrzymany | Sprawdź dokładną nazwę pola (case-sensitive); musi nazywać też asocjację docelową |
 | `showInFilter = true` na `RELATION_LIST` | Nie ma sensu — listy relacji nie filtrujemy | Ustaw `showInFilter = false` |
-| Brak `targetEntity` przy niejednoznacznej kolekcji | Framework może wywnioskować złą klasę | Zawsze jawnie podaj `targetEntity` |
+| `targetEntity` niezgodne z typem asocjacji | Build zatrzymany (nadpisanie musi zgadzać się z modelem) | Popraw nadpisanie albo usuń je i pozwól wywieść cel |
 
 ---
 
@@ -1968,7 +2014,8 @@ class Customer {
     )
     var phone: String = ""
 
-    @Column
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "country_id")
     @PortalField(
         label = "Kraj",
         tab = "CONTACT", order = 3,
@@ -1980,10 +2027,11 @@ class Customer {
         targetEntity = Country::class,
         editable = true,
         displayFields = ["name", "code"],
-        searchFields = ["name", "code"]
+        searchFields = ["name", "code"],
+        labelField = "name",
+        valueField = "id"
     )
-    @PortalLookup(labelField = "name", valueField = "id")
-    var countryId: Long? = null
+    var country: Country? = null
 
     @Column
     @PortalField(
@@ -2056,8 +2104,8 @@ class Customer {
 | `Boolean` | `BOOLEAN` |
 | `Enum` | `SELECT` z `selectEnum` |
 | Lista enumów | `MULTI_SELECT` z `selectEnum` |
-| Klucz obcy (Long?) | `RELATION` z `@PortalRelation` + `@PortalLookup` |
-| Kolekcja encji | `RELATION_LIST` z `@PortalRelation` + `@PortalLookup` |
+| Asocjacja to-one (`@ManyToOne`) | `RELATION` z `@PortalRelation` |
+| Kolekcja encji (`@OneToMany`) | `RELATION_LIST` z `@PortalRelation` |
 | `String` (ścieżka pliku) | `FILE` |
 
 ### Jak ukryć pole ID?
@@ -2137,16 +2185,25 @@ Framework automatycznie filtruje rekordy z `deleted = true` we wszystkich zapyta
 
 ### Jak konfigurować kaskadowe dropdowny?
 
-Użyj `@PortalLookup(dependsOn = "nazwaPolaRodzica")`. Frontend automatycznie przekaże wartość pola nadrzędnego jako filtr przy pobieraniu opcji z endpointu `/lookup`.
+Użyj `@PortalRelation(dependsOn = "...")` razem z pomocniczym pickerem na tym samym formularzu. Frontend automatycznie przekaże bieżącą wartość helpera jako filtr przy pobieraniu opcji z endpointu `/lookup`. Nazwa helpera musi zgadzać się z **asocjacją na encji docelowej** (backend filtruje `e.{dependsOn}.id`).
 
 ```kotlin
-// Kraj (źródło)
-@PortalLookup(labelField = "name", valueField = "id")
-var countryId: Long? = null
+// Pomocniczy picker gatunku na formularzu Loan (wartość NIE jest persystowana)
+@Transient
+@PortalField(label = "Filtruj po gatunku", renderer = RendererType.RELATION)
+@PortalRelation(targetEntity = Genre::class, searchFields = ["name"])
+var genre: Long? = null
 
-// Miasto (zależy od kraju)
-@PortalLookup(labelField = "name", valueField = "id", dependsOn = "countryId")
-var cityId: Long? = null
+// Książka (zależy od gatunku) — backend dodaje: AND e.genre.id = :depVal
+@ManyToOne(fetch = FetchType.LAZY)
+@JoinColumn(name = "book_id", nullable = false)
+@PortalField(label = "Książka", renderer = RendererType.RELATION)
+@PortalRelation(
+    targetEntity = Book::class,
+    searchFields = ["title", "isbn"],
+    dependsOn = "genre"
+)
+var book: Book? = null
 ```
 
 ### Kolejność adnotacji na polu
@@ -2154,12 +2211,12 @@ var cityId: Long? = null
 Zalecana kolejność (dla czytelności):
 
 ```kotlin
-@Column(...)             // JPA
+@ManyToOne(...) / @OneToMany(...) // asocjacja JPA (jeśli dotyczy)
+@JoinColumn(...)         // mapowanie FK (strona właściciela to-one, jeśli dotyczy)
 @Enumerated(...)         // JPA (opcjonalnie)
 @Regex(...)              // Walidacja wzorcem
 @PortalField(...)        // Deklaracja pola UI
-@PortalRelation(...)     // Konfiguracja relacji (jeśli dotyczy)
-@PortalLookup(...)       // Konfiguracja lookup (jeśli dotyczy)
+@PortalRelation(...)     // Prezentacja relacji (jeśli dotyczy)
 @PortalDependency(...)   // Reguły warunkowe (jeśli dotyczy, powtarzalna)
 var fieldName: Type = defaultValue
 ```
@@ -2369,8 +2426,7 @@ Przykłady:
 | `@PortalAction` | Klasa | **Tak** | Deklaruje przycisk akcji z handlerem, opcjonalnym formularzem, potwierdzeniem |
 | `@PortalSecurity` | Klasa | Nie | Kontrola dostępu oparta na rolach (view/edit/delete/action + row-level ownership) |
 | `@PortalField` | Pole/Funkcja | Nie | Deklaruje pole UI; ustawia renderer, filtr, walidację, szerokość, grupę |
-| `@PortalRelation` | Pole | Nie | Konfiguruje encję docelową, wyświetlane kolumny, akcje per-wiersz dla RELATION/RELATION_LIST |
-| `@PortalLookup` | Pole/Funkcja | Nie | Konfiguruje label/value pól lookupa, filtr, kaskadową zależność, parentField |
+| `@PortalRelation` | Pole | Nie | Prezentacja asocjacji RELATION/RELATION_LIST: nadpisanie celu, kolumny, filtry pickera, znacznik kasowania, akcje per-wiersz |
 | `@PortalDependency` | Pole/Funkcja | **Tak** | Warunkowa widoczność, dostępne wartości i zakres numeryczny |
 | `@PortalFormField` | Pole | Nie | Opisuje pole w modelu formularza akcji (użyj `@field:`) |
 | `@Regex` | Pole | Nie | Dołącza wzorzec regex dla walidacji po stronie frontendu |

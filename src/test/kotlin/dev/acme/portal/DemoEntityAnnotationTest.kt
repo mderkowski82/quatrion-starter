@@ -11,6 +11,7 @@ import dev.quatrion.portal.config.PortalUiConfig
 import dev.quatrion.portal.i18n.PortalI18nService
 import dev.quatrion.portal.license.LicenseVerifier
 import jakarta.persistence.Column
+import jakarta.persistence.OneToMany
 import jakarta.persistence.Transient
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
@@ -244,16 +245,27 @@ class DemoEntityAnnotationTest {
 
     @ParameterizedTest(name = "{0}")
     @MethodSource("demoEntityClasses")
-    fun `RELATION_LIST fields are marked with @jakarta_persistence_Transient`(clazz: Class<*>) {
+    fun `RELATION_LIST fields are backed by @OneToMany with mappedBy`(clazz: Class<*>) {
+        // Panel relations live in JPA associations (R1): a RELATION_LIST is the
+        // inverse side (@OneToMany + mappedBy), never a @Transient placeholder.
         clazz.declaredFields
             .filter {
                 val pf = it.getAnnotation(PortalField::class.java) ?: return@filter false
                 pf.renderer == RendererType.RELATION_LIST
             }
             .forEach { field ->
+                val oneToMany = field.getAnnotation(OneToMany::class.java)
                 assertNotNull(
+                    oneToMany,
+                    "${clazz.simpleName}.${field.name} is RELATION_LIST but lacks @OneToMany"
+                )
+                assertTrue(
+                    oneToMany!!.mappedBy.isNotEmpty(),
+                    "${clazz.simpleName}.${field.name} is RELATION_LIST but @OneToMany has no mappedBy"
+                )
+                assertNull(
                     field.getAnnotation(Transient::class.java),
-                    "${clazz.simpleName}.${field.name} is RELATION_LIST but lacks @Transient"
+                    "${clazz.simpleName}.${field.name} is RELATION_LIST but still marked @Transient"
                 )
             }
     }
@@ -389,9 +401,9 @@ class DemoEntityAnnotationTest {
     }
 
     @Test
-    fun `DemoCategory has self-referential parentId RELATION`() {
+    fun `DemoCategory has self-referential parent RELATION`() {
         val meta = metadataService.buildEntityMetadata(DemoCategory::class.java)
-        val field = meta.fields.find { it.name == "parentId" }!!
+        val field = meta.fields.find { it.name == "parent" }!!
         assertEquals("RELATION", field.renderer)
         assertNotNull(field.relationMeta)
         assertEquals("DemoCategory", field.relationMeta!!.targetEntity)

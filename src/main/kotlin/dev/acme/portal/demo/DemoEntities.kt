@@ -202,7 +202,8 @@ class DemoCategory {
     )
     var isActive: Boolean = true
 
-    @Column
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "parent_id")
     @PortalField(
         label = "Kategoria nadrzędna",
         order = 5,
@@ -211,7 +212,7 @@ class DemoCategory {
         showInTable = false
     )
     @PortalRelation(targetEntity = DemoCategory::class, editable = true, displayFields = ["name"], searchFields = ["name"])
-    var parentId: Long? = null
+    var parent: DemoCategory? = null
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -399,7 +400,8 @@ class DemoCustomer {
     )
     var registeredAt: String = ""
 
-    @Column
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "country_id")
     @PortalField(
         label = "Kraj",
         tab = "CONTACT",
@@ -409,7 +411,7 @@ class DemoCustomer {
         showInTable = false
     )
     @PortalRelation(targetEntity = DemoCountry::class, editable = true, displayFields = ["name", "code"], searchFields = ["name", "code"])
-    var countryId: Long? = null
+    var country: DemoCountry? = null
 
     // ── FINANCIAL tab ──────────────────────────────────────
 
@@ -512,7 +514,8 @@ class DemoCustomer {
     )
     var tags: String = ""
 
-    @Column
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "category_id")
     @PortalField(
         label = "Kategoria",
         tab = "FINANCIAL",
@@ -522,7 +525,7 @@ class DemoCustomer {
         showInTable = false
     )
     @PortalRelation(targetEntity = DemoCategory::class, editable = true, displayFields = ["name"], searchFields = ["name"])
-    var categoryId: Long? = null
+    var category: DemoCategory? = null
 
     // ── SYSTEM tab ─────────────────────────────────────────
 
@@ -587,7 +590,7 @@ class DemoCustomer {
     var customField: String = ""
 
 
-    @Transient
+    @OneToMany(mappedBy = "customer", fetch = FetchType.LAZY)
     @PortalField(
         label = "Zamówienia",
         tab = "SYSTEM",
@@ -604,7 +607,7 @@ class DemoCustomer {
         displayFields = ["orderNumber", "orderDate", "totalAmount", "status"],
         searchFields = ["orderNumber"],
     )
-    var orders: List<dev.acme.portal.demo.DemoOrder>? = null
+    var orders: MutableList<dev.acme.portal.demo.DemoOrder> = mutableListOf()
 
     /**
      * JPA optimistic locking version — prevents lost-update race conditions.
@@ -747,7 +750,8 @@ class DemoOrder {
     )
     var notes: String = ""
 
-    @Column
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "customer_id")
     @PortalField(
         label = "Klient",
         tab = "INFO",
@@ -756,11 +760,11 @@ class DemoOrder {
         filterType = FilterType.EXACT
     )
     @PortalRelation(targetEntity = DemoCustomer::class, editable = true, displayFields = ["name", "email"], searchFields = ["name", "email"])
-    var customerId: Long? = null
+    var customer: DemoCustomer? = null
 
     // ── ITEMS tab ──────────────────────────────────────────
 
-    @Transient
+    @OneToMany(mappedBy = "order", fetch = FetchType.LAZY)
     @PortalField(
         label = "Pozycje zamówienia",
         tab = "ITEMS",
@@ -774,10 +778,10 @@ class DemoOrder {
         targetEntity = DemoOrderItem::class,
         editable = true,
         inlineEdit = true,
-        displayFields = ["productId", "quantity", "unitPrice"],
+        displayFields = ["product", "quantity", "unitPrice"],
         maxItems = 100
     )
-    var items: List<dev.acme.portal.demo.DemoOrderItem>? = null
+    var items: MutableList<dev.acme.portal.demo.DemoOrderItem> = mutableListOf()
 
     /** JPA optimistic locking — see DemoCustomer.version for details. */
     @Column(columnDefinition = "bigint not null default 0")
@@ -811,7 +815,8 @@ class DemoOrderItem {
     @PortalField(label = "ID", order = 0, readonly = true, showInFilter = false)
     var id: Long = 0
 
-    @Column
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "order_id")
     @PortalField(
         label = "Zamówienie",
         order = 1,
@@ -819,9 +824,10 @@ class DemoOrderItem {
         filterType = FilterType.EXACT
     )
     @PortalRelation(targetEntity = DemoOrder::class, editable = false, displayFields = ["orderNumber"], searchFields = ["orderNumber"])
-    var orderId: Long? = null
+    var order: DemoOrder? = null
 
-    @Column
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "product_id")
     @PortalField(
         label = "Produkt",
         order = 2,
@@ -829,7 +835,7 @@ class DemoOrderItem {
         filterType = FilterType.EXACT
     )
     @PortalRelation(targetEntity = DemoProduct::class, editable = true, displayFields = ["name", "sku"], searchFields = ["name", "sku"])
-    var productId: Long? = null
+    var product: DemoProduct? = null
 
     @Column
     @PortalField(
@@ -874,7 +880,9 @@ class DemoOrderItem {
         Index(name = "idx_demo_product_is_active",   columnList = "is_active"),
         Index(name = "idx_demo_product_price",       columnList = "price"),
         Index(name = "idx_demo_product_quantity",    columnList = "quantity"),
-        Index(name = "idx_demo_product_category_id", columnList = "category_id")
+        Index(name = "idx_demo_product_category_id", columnList = "category_id"),
+        Index(name = "idx_demo_product_country_id",  columnList = "country_id"),
+        Index(name = "idx_demo_product_supplier_id", columnList = "supplier_id")
     ]
 )
 @PortalEntity(
@@ -948,7 +956,8 @@ class DemoProduct {
     )
     var isActive: Boolean = true
 
-    @Column
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "category_id")
     @PortalField(
         label = "Kategoria",
         tab = "INFO",
@@ -957,7 +966,7 @@ class DemoProduct {
         filterType = FilterType.EXACT
     )
     @PortalRelation(targetEntity = DemoCategory::class, editable = true, displayFields = ["name"], searchFields = ["name"])
-    var categoryId: Long? = null
+    var category: DemoCategory? = null
 
     // ── DETAILS tab ────────────────────────────────────────
 
@@ -996,7 +1005,8 @@ class DemoProduct {
     )
     var tags: String = ""
 
-    @Column
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "country_id")
     @PortalField(
         label = "Kraj pochodzenia",
         tab = "DETAILS",
@@ -1006,9 +1016,10 @@ class DemoProduct {
         showInTable = false
     )
     @PortalRelation(targetEntity = DemoCountry::class, editable = true, displayFields = ["name", "code"], searchFields = ["name"])
-    var countryId: Long? = null
+    var country: DemoCountry? = null
 
-    @Column
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "supplier_id")
     @PortalField(
         label = "Dostawca",
         tab = "DETAILS",
@@ -1018,7 +1029,7 @@ class DemoProduct {
         showInTable = false
     )
     @PortalRelation(targetEntity = DemoSupplier::class, editable = true, displayFields = ["name"], searchFields = ["name"])
-    var supplierId: Long? = null
+    var supplier: DemoSupplier? = null
 
     // ── MEDIA tab ──────────────────────────────────────────
 

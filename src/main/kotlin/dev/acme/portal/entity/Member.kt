@@ -361,8 +361,10 @@ class Member : AuditableEntity() {
     var notes: String = ""
 
     // ─── Zakładka LOANS — RELATION_LIST (historia wypożyczeń) ────────────────
+    // Strona odwrotna asocjacji Loan.member: lista wywodzi się z kolekcji,
+    // bez jawnej deklaracji kaskady usunięcie członka z wypożyczeniami jest blokowane (409).
 
-    @Transient
+    @OneToMany(mappedBy = "member", fetch = FetchType.LAZY)
     @PortalField(
         label = "Historia wypożyczeń", labelKey = "field.member.loans",
         tab = "LOANS", order = 1,
@@ -376,14 +378,13 @@ class Member : AuditableEntity() {
         editable = false,
         displayFields = ["bookTitle", "loanDate", "dueDate", "returnDate", "status"],
         searchFields = ["status"],
-        cascadeDelete = true,
         orderBy = "loanDate DESC",
         maxItems = 200,
         labelField = "status",
-        parentField = "memberId",
+        parentField = "member",
         maxResults = 200
     )
-    var loans: List<dev.acme.portal.entity.Loan>? = null
+    var loans: MutableList<Loan> = mutableListOf()
 
     @Column(nullable = false)
     @PortalField(label = "Usunięty", hidden = true, showInTable = false, showInFilter = false)

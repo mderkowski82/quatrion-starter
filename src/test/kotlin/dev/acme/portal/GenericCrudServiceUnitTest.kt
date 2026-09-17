@@ -4,13 +4,20 @@ import dev.quatrion.portal.annotation.PortalEntity
 import dev.quatrion.portal.annotation.PortalField
 import dev.quatrion.portal.annotation.RendererType
 import dev.quatrion.portal.model.EntityData
+import dev.quatrion.portal.security.PortalSecurityChecker
 import dev.quatrion.portal.service.EntityMapper
+import dev.quatrion.portal.service.EntityRegistry
 import dev.quatrion.portal.service.FilterParser
 import dev.quatrion.portal.service.GenericCrudService
+import dev.quatrion.portal.service.MetadataService
+import jakarta.persistence.Entity
+import jakarta.persistence.Id
+import jakarta.persistence.ManyToOne
 import jakarta.persistence.Transient
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
+import org.mockito.kotlin.mock
 import java.math.BigInteger
 import java.time.Instant
 import java.time.LocalDate
@@ -74,8 +81,9 @@ class GenericCrudServiceUnitTest {
 
     private val service = GenericCrudService(
         filterParser = FilterParser(),
-        metadataService = TODO(),
-        entityRegistry = TODO()
+        metadataService = mock<MetadataService>(),
+        entityRegistry = mock<EntityRegistry>(),
+        securityChecker = mock<PortalSecurityChecker>()
     )
     private val mapper = EntityMapper()
 
@@ -660,6 +668,65 @@ class GenericCrudServiceUnitTest {
         assertEquals("", e.customField, "customField must be set")
     }
 
+    // ── Association binding (JPA-as-truth wire: {"target": id}) ───────────────
+    // To-one associations bind by target identifier into a transient reference
+    // carrying only the id; merge resolves it to a foreign key without a select.
+
+    @Test
+    fun `mapToEntity binds association from Int id (JSON integer)`() {
+        val e = AssocHolderEntity()
+        mapper.mapToEntity(e, EntityData(mapOf("target" to 5)), AssocHolderEntity::class.java)
+        assertNotNull(e.target, "association must be bound")
+        assertEquals(5L, e.target!!.id)
+    }
+
+    @Test
+    fun `mapToEntity binds association from Long id`() {
+        val e = AssocHolderEntity()
+        mapper.mapToEntity(e, EntityData(mapOf("target" to 7L)), AssocHolderEntity::class.java)
+        assertNotNull(e.target, "association must be bound")
+        assertEquals(7L, e.target!!.id)
+    }
+
+    @Test
+    fun `mapToEntity binds association from String id`() {
+        val e = AssocHolderEntity()
+        mapper.mapToEntity(e, EntityData(mapOf("target" to "9")), AssocHolderEntity::class.java)
+        assertNotNull(e.target, "association must be bound")
+        assertEquals(9L, e.target!!.id)
+    }
+
+    @Test
+    fun `mapToEntity clears association on null`() {
+        val e = AssocHolderEntity().apply { target = AssocTargetEntity().apply { id = 3 } }
+        mapper.mapToEntity(e, EntityData(mapOf("target" to null)), AssocHolderEntity::class.java)
+        assertNull(e.target, "association must be cleared")
+    }
+
+    @Test
+    fun `mapToEntity leaves association unchanged on unparseable id`() {
+        val e = AssocHolderEntity()
+        mapper.mapToEntity(e, EntityData(mapOf("target" to "abc")), AssocHolderEntity::class.java)
+        assertNull(e.target, "unparseable id must leave association unchanged")
+    }
+
+    @Test
+    fun `entityToMap emits id scalar for association`() {
+        val e = AssocHolderEntity().apply {
+            id = 1
+            target = AssocTargetEntity().apply { id = 42; name = "X" }
+        }
+        val map = mapper.entityToMap(e)
+        assertEquals(42L, map["target"], "association must be emitted as id scalar")
+    }
+
+    @Test
+    fun `entityToMap emits null for unset association`() {
+        val map = mapper.entityToMap(AssocHolderEntity())
+        assertTrue(map.containsKey("target"))
+        assertNull(map["target"])
+    }
+
     // ── entityToMap output for DemoCustomer-like entity ───────────────────────
 
     @Test
@@ -1165,6 +1232,28 @@ class GenericCrudServiceUnitTest {
         }
         assertTrue(exception.message!!.contains("birthDate"))
     }
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
+// ── Association binding fixtures (JPA-as-truth wire) ─────────────────────────
+//    To-one associations travel as the target id scalar and bind into
+//    a transient reference carrying only the id.
+// ════════════════════════════════════════════════════════════════════════════════
+
+@Entity
+@PortalEntity(label = "Association Target", module = "Test")
+class AssocTargetEntity {
+    @Id
+    var id: Long = 0
+    var name: String = ""
+}
+
+@PortalEntity(label = "Association Holder", module = "Test")
+class AssocHolderEntity {
+    var id: Long = 0
+
+    @ManyToOne
+    var target: AssocTargetEntity? = null
 }
 
 // ════════════════════════════════════════════════════════════════════════════════

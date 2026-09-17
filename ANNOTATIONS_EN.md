@@ -15,7 +15,7 @@
    - [RendererType — renderer types](#renderertype--renderer-types)
    - [FilterType — filter strategies](#filtertype--filter-strategies)
 5. [@Regex — pattern validation](#5-regex--pattern-validation)
-6. [@PortalRelation + @PortalLookup — relations](#6-portalrelation--portallookup--relations)
+6. [@PortalRelation — relations](#6-portalrelation--relations)
 7. [@PortalDependency — conditional rules](#7-portaldependency--conditional-rules)
 8. [@PortalAction + @PortalFormField — custom actions](#8-portalaction--portalformfield--custom-actions)
 9. [@PortalSecurity — access control](#9-portalsecurity--access-control)
@@ -236,6 +236,7 @@ annotation class PortalField(
     val hidden: Boolean = false,
     val showInTable: Boolean = true,
     val showInFilter: Boolean = true,
+    val showInForm: Boolean = true,
     val required: Boolean = false,
     val placeholder: String = "",
     val tooltip: String = "",
@@ -271,6 +272,7 @@ annotation class PortalField(
 | `hidden` | `Boolean` | `false` | Field is excluded from both the table and form (for internal/system fields) |
 | `showInTable` | `Boolean` | `true` | Whether the field appears as a column in the entity list table |
 | `showInFilter` | `Boolean` | `true` | Whether the field appears in the filter panel |
+| `showInForm` | `Boolean` | `true` | Whether the field appears in the create/edit form (derived labels that would go stale stay table-only) |
 | `required` | `Boolean` | `false` | Validation: field must be non-empty before saving |
 | `placeholder` | `String` | `""` | Placeholder text shown inside empty input fields |
 | `tooltip` | `String` | `""` | Short help text displayed near the input field |
@@ -299,8 +301,8 @@ annotation class PortalField(
 | `BOOLEAN` | Checkbox / toggle | Kotlin type: `Boolean` |
 | `SELECT` | Single-value dropdown | Requires `selectOptions` or `selectEnum` |
 | `MULTI_SELECT` | Multi-value dropdown | Stored as comma-separated values in the database |
-| `RELATION` | ManyToOne / OneToOne lookup picker | Requires `@PortalRelation` + `@PortalLookup` |
-| `RELATION_LIST` | OneToMany / ManyToMany inline list | Requires `@PortalRelation` + `@PortalLookup` |
+| `RELATION` | ManyToOne / OneToOne lookup picker | Requires a JPA association + `@PortalRelation` |
+| `RELATION_LIST` | OneToMany inline list | Requires `@OneToMany(mappedBy = ...)` + `@PortalRelation` |
 | `PASSWORD` | Password input (value masked) | Does not appear in the table |
 | `EMAIL` | Email input with format validation | — |
 | `URL` | URL input with format validation | — |
@@ -518,25 +520,29 @@ var vatNumber: String = ""
 
 ---
 
-## 6. `@PortalRelation` + `@PortalLookup` — relations
+## 6. `@PortalRelation` — relations
+
+Every panel relation exists as a **JPA association** — the single source of truth (R1). `@PortalRelation` declares **presentation only** (plus a consistent target override and an enforced delete marker); it never creates a relation by itself. Placing it on a raw numeric key or a `@Transient` list without an association is illegal and fails the build.
 
 ---
 
 ### How it works — data flow
 
-Both annotations **must be placed together** on the same field. At server startup, `MetadataService` merges them into a single `RelationMetadata` object, which is sent to the frontend as part of the field's metadata.
-
-```
-JPA entity
-  @PortalField(renderer = RELATION)    ← tells frontend "render a picker"
-  @PortalRelation(targetEntity = ...)   ← describes how to display and which entity to link
-  @PortalLookup(labelField = ...)       ← describes how to call /lookup endpoint
-  var countryId: Long? = null
+```kotlin
+@ManyToOne(fetch = FetchType.LAZY)
+@JoinColumn(name = "country_id")
+@PortalField(renderer = RendererType.RELATION, ...)   ← tells frontend "render a picker"
+@PortalRelation(                                       ← presentation: labels, picker filters
+    displayFields = ["name", "code"],
+    searchFields = ["name", "code"],
+    labelField = "name"
+)
+var country: DemoCountry? = null                      ← JPA association = truth
          │
          ▼ MetadataService (startup)
          │
   RelationMetadata {
-    targetEntity  = "Country"           ← simple class name
+    targetEntity  = "DemoCountry"     ← derived from the association type
     labelField    = "name"
     valueField    = "id"
     displayFields = ["name", "code"]
@@ -548,12 +554,14 @@ JPA entity
          │
          ▼ JSON → /api/portal/metadata → frontend
          │
-  Table:  RelationCell  →  GET /api/portal/data/Country/{id}
+  Table:  RelationCell  →  GET /api/portal/data/DemoCountry/{id}
                             displays the value of the "name" field of the selected record
          │
-  Form:   RelationRenderer  →  GET /api/portal/data/Country/lookup?q=pol&labelField=name&valueField=id
+  Form:   RelationRenderer  →  GET /api/portal/data/DemoCountry/lookup?q=pol&labelField=name&valueField=id
                                 autocomplete dropdown with search results
 ```
+
+On the wire the association travels as the target id scalar (`"country": 42`); binding by id never exposes session mechanics (R6). The form binds a relation choice through the target identifier.
 
 ---
 
@@ -561,10 +569,10 @@ JPA entity
 
 | Renderer | When to use | Field in entity |
 |---|---|---|
-| `RendererType.RELATION` | ManyToOne, OneToOne — stores a **single** foreign key | `var xyzId: Long? = null` |
-| `RendererType.RELATION_LIST` | OneToMany, ManyToMany — list of related entities | `@Transient var items: List<Entity>? = null` |
+| `RendererType.RELATION` | ManyToOne, OneToOne — a **single** related record (owning side, holds the FK) | `@ManyToOne var country: DemoCountry? = null` + `@JoinColumn` |
+| `RendererType.RELATION_LIST` | OneToMany — list of related entities (inverse side, derived from the owning mapping) | `@OneToMany(mappedBy = "customer") var orders: List<DemoOrder>? = null` |
 
-> **Important for `RELATION_LIST`:** The field must be annotated with `@Transient` — it is not a database column. It exists solely to carry metadata to the frontend. The backend dynamically loads related records based on `RelationMetadata`.
+> **Important for `RELATION_LIST`:** The field must be a `@OneToMany` collection with `mappedBy` pointing at the owning association — never `@Transient`. The child list is derived from the inverse side, not from a manual parent key. Many-to-many is modelled only through an explicit link entity with two mandatory `@ManyToOne` associations (no implicit `@JoinTable`).
 
 ---
 
@@ -584,26 +592,37 @@ annotation class PortalRelation(
     val orderBy: String = "",
     val maxItems: Int = 0,
     val downloadAction: String = "",
-    val actions: Array<RelationRowAction> = []
+    val actions: Array<RelationRowAction> = [],
+    // --- picker presentation ---
+    val labelField: String = "name",
+    val valueField: String = "id",
+    val filterQuery: String = "",
+    val dependsOn: String = "",
+    val maxResults: Int = 100,
+    val parentField: String = ""
 )
 ```
 
 #### `targetEntity: KClass<*> = Unit::class`
 
-The target JPA entity class. When set (other than `Unit::class`), the framework uses its simple name (`simpleName`) as the entity identifier when calling endpoints.
+Consistent override of the relation target **only**. The target and the relation type are derived from the JPA association; setting this to a concrete entity class is allowed solely when it matches the association type (a mismatch fails the build).
 
-**When can it be omitted?** The framework will try to infer the target entity:
+**When can it be omitted?** The framework derives the target:
 - For collections (`List<T>`) — from the generic type argument `T`
-- For reference fields (`var xyzId: Long?`) — from the field name (convention `xyzId` → `Xyz`)
+- For to-one associations — from the field type itself
 
-In practice, always explicitly set `targetEntity` to avoid ambiguity.
+In practice, setting `targetEntity` explicitly documents intent; keeping it means keeping it consistent.
 
 ```kotlin
-// ✅ Explicit target entity — recommended
+// ✅ Explicit target entity matching the association — recommended
+@ManyToOne(fetch = FetchType.LAZY)
+@JoinColumn(name = "country_id")
 @PortalRelation(targetEntity = DemoCountry::class, ...)
+var country: DemoCountry? = null
 
-// ⚠️ Without targetEntity — framework tries to infer from List<DemoOrderItem>
-@PortalRelation(displayFields = ["productId", "quantity"])
+// ✅ Derived from the collection element type
+@OneToMany(mappedBy = "order", fetch = FetchType.LAZY)
+@PortalRelation(displayFields = ["product", "quantity"])
 var items: List<DemoOrderItem>? = null
 ```
 
@@ -615,12 +634,14 @@ Target entity fields shown as **columns in the table** in `RELATION_LIST` mode, 
 
 ```kotlin
 // Picker shows "John Smith (j.smith@example.com)"
+@ManyToOne(fetch = FetchType.LAZY)
+@JoinColumn(name = "customer_id")
 @PortalRelation(
     targetEntity = DemoCustomer::class,
     displayFields = ["name", "email"],   // both shown as columns in the list
     searchFields = ["name", "email"]
 )
-var customerId: Long? = null
+var customer: DemoCustomer? = null
 ```
 
 When `displayFields = []` (default), the frontend selects visible columns based on `showInTable` from the target entity's metadata.
@@ -648,17 +669,19 @@ Provide the fields that make sense for searching (typically `name`, `code`, `ema
 
 #### `editable: Boolean = true`
 
-When `false`, the picker is locked (read-only in the form). Useful e.g. for the `orderId` field on an order item — the parent order ID should not be changed from within the child.
+When `false`, the picker is locked (read-only in the form). Useful e.g. for the `order` field on an order item — the parent order should not be changed from within the child.
 
 ```kotlin
 // Order field — read-only (parent reference)
+@ManyToOne(fetch = FetchType.LAZY)
+@JoinColumn(name = "order_id")
 @PortalRelation(
     targetEntity = DemoOrder::class,
     editable = false,            // picker is locked
     displayFields = ["orderNumber"],
     searchFields = ["orderNumber"]
 )
-var orderId: Long? = null
+var order: DemoOrder? = null
 ```
 
 ---
@@ -668,11 +691,12 @@ var orderId: Long? = null
 `RELATION_LIST` only. When `true`, related records can be edited directly in the embedded table inside the parent form, without opening a separate modal.
 
 ```kotlin
+@OneToMany(mappedBy = "order", fetch = FetchType.LAZY)
 @PortalRelation(
     targetEntity = DemoOrderItem::class,
     editable = true,
     inlineEdit = true,           // edit directly in the items table
-    displayFields = ["productId", "quantity", "unitPrice"],
+    displayFields = ["product", "quantity", "unitPrice"],
     maxItems = 100
 )
 var items: List<DemoOrderItem>? = null
@@ -685,20 +709,33 @@ var items: List<DemoOrderItem>? = null
 When `true`, the picker shows a **"Create new"** option. The user can open the target entity's create form directly from within the picker, without navigating away.
 
 ```kotlin
+@ManyToOne(fetch = FetchType.LAZY)
+@JoinColumn(name = "supplier_id")
 @PortalRelation(
     targetEntity = DemoSupplier::class,
     displayFields = ["name"],
     searchFields = ["name"],
     createAllowed = true         // "Add new supplier" in the picker
 )
-var supplierId: Long? = null
+var supplier: DemoSupplier? = null
 ```
 
 ---
 
 #### `cascadeDelete: Boolean = false`
 
-Informational only — does not configure actual JPA cascade behaviour. When `true`, the frontend may display a warning when the parent is deleted. **JPA cascade must be configured separately** via `cascade = CascadeType.REMOVE` in the entity mapping.
+Enforced delete marker, not an informational hint. The effective delete semantics are derived from the domain association: without a cascade declaration, deleting a parent with related rows is **blocked** (`409 Conflict`); set this to `true` only to declare cascade intent, which must be backed by the JPA mapping (`cascade = REMOVE`/`ALL` or orphan removal) and database constraints. A mismatch between this marker and the JPA mapping fails the build, as does a self-cascade.
+
+```kotlin
+// Member with cascading loans (JPA cascade REQUIRED alongside the marker)
+@OneToMany(mappedBy = "member", fetch = FetchType.LAZY, cascade = [CascadeType.REMOVE])
+@PortalRelation(
+    targetEntity = Loan::class,
+    cascadeDelete = true,        // backed by cascade = REMOVE above
+    ...
+)
+var loans: List<Loan>? = null
+```
 
 ---
 
@@ -707,15 +744,17 @@ Informational only — does not configure actual JPA cascade behaviour. When `tr
 HQL `ORDER BY` fragment (without the `ORDER BY` keyword) applied when loading the relation list. The entity alias is `e`.
 
 ```kotlin
+@ManyToOne(fetch = FetchType.LAZY)
+@JoinColumn(name = "category_id")
 @PortalRelation(
     targetEntity = DemoCategory::class,
     displayFields = ["name"],
     orderBy = "name ASC"         // category list sorted alphabetically
 )
-var categoryId: Long? = null
+var category: DemoCategory? = null
 ```
 
-When empty, the backend sorts by `labelField` (from `@PortalLookup`) ascending.
+When empty, the backend sorts by `labelField` ascending.
 
 ---
 
@@ -725,20 +764,9 @@ Maximum number of items in a `RELATION_LIST`. When `0` (default) — no limit. T
 
 ---
 
-### `@PortalLookup` — detailed parameter reference
+### Picker presentation — `labelField`, `valueField`, `filterQuery`, `dependsOn`, `maxResults`, `parentField`
 
-```kotlin
-@Target(AnnotationTarget.FIELD, AnnotationTarget.FUNCTION)
-@Retention(AnnotationRetention.RUNTIME)
-annotation class PortalLookup(
-    val labelField: String = "name",
-    val valueField: String = "id",
-    val filterQuery: String = "",
-    val dependsOn: String = "",
-    val maxResults: Int = 100,
-    val parentField: String = ""
-)
-```
+The remaining `@PortalRelation` parameters describe how the `/lookup` endpoint is called. The deprecated standalone fallback annotation was removed — every lookup attribute must be declared on `@PortalRelation`.
 
 #### `labelField: String = "name"`
 
@@ -749,22 +777,22 @@ The target entity field displayed as the **human-readable label** in the picker 
 
 ```kotlin
 // Table shows the value of the "name" field, e.g. "Poland"
-@PortalLookup(labelField = "name", valueField = "id")
+@PortalRelation(labelField = "name", valueField = "id")
 
 // Table shows the "orderNumber" value, e.g. "ORD-2024-001"
-@PortalLookup(labelField = "orderNumber", valueField = "id")
+@PortalRelation(labelField = "orderNumber", valueField = "id")
 ```
 
 ---
 
 #### `valueField: String = "id"`
 
-The target entity field whose **value is stored** in the parent entity's column (foreign key). Defaults to `"id"` — rarely needs to be changed unless the relation is keyed by a unique field other than the primary key.
+The target entity field whose **value is stored** when a relation item is selected (typically the primary key). Defaults to `"id"` — rarely needs to be changed unless the relation is keyed by a unique field other than the primary key.
 
 ```kotlin
-// FK stores the ISO "code" value instead of numeric "id"
-@PortalLookup(labelField = "name", valueField = "code")
-var countryCode: String? = null
+// Lookup stores the ISO "code" value instead of numeric "id"
+@PortalRelation(labelField = "name", valueField = "code")
+var country: DemoCountry? = null
 ```
 
 ---
@@ -783,54 +811,53 @@ Internal HQL query:
 
 ```kotlin
 // Only active categories
-@PortalLookup(filterQuery = "e.isActive = true")
+@PortalRelation(filterQuery = "e.isActive = true")
 
 // Only European countries
-@PortalLookup(filterQuery = "e.continent = 'EUROPE'")
+@PortalRelation(filterQuery = "e.continent = 'EUROPE'")
 
 // Only products in stock
-@PortalLookup(filterQuery = "e.quantity > 0")
+@PortalRelation(filterQuery = "e.quantity > 0")
 
 // Multiple conditions (AND)
-@PortalLookup(filterQuery = "e.isActive = true AND e.isVerified = true")
+@PortalRelation(filterQuery = "e.isActive = true AND e.isVerified = true")
 ```
 
-> **Important:** The entity alias in `filterQuery` must always be `e`. Do not add the `WHERE` keyword.
+> **Important:** The entity alias in `filterQuery` must always be `e`. Do not add the `WHERE` keyword. Picker-scoping only: `filterQuery` narrows the picker, never the write path — rules that must hold on bind become named domain invariants instead. Every referenced `e.field` must exist on the target entity (validated at build time).
 
 ---
 
 #### `dependsOn: String = ""`
 
-The name of **another field on the same form** whose current value is automatically passed as a filter to the `/lookup` endpoint. Enables **cascading dropdowns** — e.g. selecting a country restricts the available cities.
+The name of **another field on the same form** whose current value is automatically passed as a filter to the `/lookup` endpoint. Enables **cascading dropdowns** — e.g. selecting a genre restricts the available books.
 
 **How it works technically:**
 
-1. User selects a value in the `countryId` field (e.g. `42`)
-2. Frontend re-calls `/api/portal/data/City/lookup?dependsOnField=countryId&dependsOnValue=42`
-3. Backend adds to HQL: `AND e.countryId = :depVal`
-4. Only cities assigned to the country with `id = 42` appear in the dropdown
+1. User selects a value in the `genre` helper field on the Loan form (e.g. `7`)
+2. Frontend re-calls `/api/portal/data/Book/lookup?dependsOnField=genre&dependsOnValue=7`
+3. Backend adds to HQL: `AND e.genre.id = :depVal` (association-aware: `.id` is appended for association fields)
+4. Only books assigned to the genre with `id = 7` appear in the dropdown
 
 ```kotlin
-// Source field (country)
-@Column
-@PortalField(label = "Country", order = 5, renderer = RendererType.RELATION)
-@PortalRelation(targetEntity = DemoCountry::class, searchFields = ["name"])
-@PortalLookup(labelField = "name", valueField = "id")
-var countryId: Long? = null
+// Loan form: helper picker (value is NOT persisted)
+@Transient
+@PortalField(label = "Filter by genre (helper)", order = 2, renderer = RendererType.RELATION, ...)
+@PortalRelation(targetEntity = Genre::class, searchFields = ["name"])
+var genre: Long? = null          // same name as the Book association below
 
-// Dependent field (city filtered by selected country)
-@Column
-@PortalField(label = "City", order = 6, renderer = RendererType.RELATION)
-@PortalRelation(targetEntity = City::class, searchFields = ["name"])
-@PortalLookup(
-    labelField = "name",
-    valueField = "id",
-    dependsOn = "countryId"    // field name on the CURRENT form (not the table!)
+// Loan form: book picker filtered by the selected genre
+@ManyToOne(fetch = FetchType.LAZY)
+@JoinColumn(name = "book_id", nullable = false)
+@PortalField(label = "Book", order = 3, renderer = RendererType.RELATION)
+@PortalRelation(
+    targetEntity = Book::class,
+    searchFields = ["title", "isbn"],
+    dependsOn = "genre"          // form field on THIS form AND association on Book
 )
-var cityId: Long? = null
+var book: Book? = null
 ```
 
-> **Note:** The field on the target entity used for filtering (e.g. `City.countryId`) must have the same name as the field referenced by `dependsOn`. The backend generates: `e.{dependsOn} = :depVal`.
+> **Note:** `dependsOn` names a field on the **current form** (the helper above) that must share its name with the **association on the target entity** (`Book.genre`). The backend filters `e.{dependsOn}.id = :depVal` for associations, `e.{dependsOn} = :depVal` otherwise. A helper `@Transient` field carrying `@PortalRelation` is legal only as such a `dependsOn` source. `dependsOn` must reference an existing field of the current entity (validated at build time).
 
 ---
 
@@ -840,10 +867,27 @@ Maximum number of options returned from the `/lookup` endpoint per request. Decr
 
 ```kotlin
 // Small dictionary table — show all options immediately
-@PortalLookup(labelField = "name", valueField = "id", maxResults = 500)
+@PortalRelation(labelField = "name", valueField = "id", maxResults = 500)
 
 // Large customer table — limit autocomplete suggestions
-@PortalLookup(labelField = "name", valueField = "id", maxResults = 20)
+@PortalRelation(labelField = "name", valueField = "id", maxResults = 20)
+```
+
+---
+
+#### `parentField: String = ""`
+
+For `RELATION_LIST` fields only: name of the field in the **target** entity that holds the owning-side association back to the parent entity (e.g. `"member"` on `Loan` when the list is placed on `Member`). When set, the frontend auto-fetches related records by querying `GET /api/portal/data/{targetEntity}?filter[parentField][eq]={parentId}` instead of relying on the parent entity's `getById` response to include the list. Empty string means no auto-fetch.
+
+```kotlin
+// Member form: loan history auto-fetched via Loan.member
+@OneToMany(mappedBy = "member", fetch = FetchType.LAZY)
+@PortalRelation(
+    targetEntity = Loan::class,
+    displayFields = ["bookTitle", "loanDate", "status"],
+    parentField = "member"     // owning association on Loan
+)
+var loans: List<Loan>? = null
 ```
 
 ---
@@ -885,11 +929,17 @@ Returns a list of `LookupOption`:
 | `displayFields` | `Array<String>` | `[]` | Columns shown in `RELATION_LIST` table or additional info in the picker |
 | `searchFields` | `Array<String>` | `[]` | Fields searched when the user types text in the picker |
 | `createAllowed` | `Boolean` | `false` | Picker shows "Create new" option |
-| `cascadeDelete` | `Boolean` | `false` | Informational: whether deleting the parent cascades to children |
+| `cascadeDelete` | `Boolean` | `false` | Enforced delete marker: `true` declares cascade intent backed by the JPA mapping and DB constraints (mismatch fails the build); `false` (default) blocks deletion when related rows exist |
 | `orderBy` | `String` | `""` | HQL `ORDER BY` fragment (without keyword), alias `e` |
 | `maxItems` | `Int` | `0` | Item limit in `RELATION_LIST` (0 = unlimited) |
 | `downloadAction` | `String` | `""` | Name of a `@PortalAction` on the target entity that triggers a file download. When non-empty, a download icon button is rendered for each row in the `RELATION_LIST` |
 | `actions` | `Array<RelationRowAction>` | `[]` | Per-row action buttons in the `RELATION_LIST` table (see `RelationRowAction`) |
+| `labelField` | `String` | `"name"` | Target entity field shown as label in picker and table cell |
+| `valueField` | `String` | `"id"` | Target entity field stored as value when an item is selected |
+| `filterQuery` | `String` | `""` | Permanent HQL WHERE filter (alias `e.`), e.g. `"e.isActive = true"` — picker-scoping only |
+| `dependsOn` | `String` | `""` | Name of another form field — enables cascading dropdown (must also name the target association) |
+| `maxResults` | `Int` | `100` | Max options returned by `/lookup` per request |
+| `parentField` | `String` | `""` | `RELATION_LIST` only: owning association field on the target entity back to the parent (e.g. `"member"` on `Loan`); enables frontend auto-fetch |
 
 #### `RelationRowAction` — predefined per-row actions
 
@@ -905,51 +955,40 @@ enum class RelationRowAction(val actionName: String) {
 
 **Example — file list with download button:**
 ```kotlin
-@Transient
+@OneToMany(mappedBy = "taskRun", fetch = FetchType.LAZY)
 @PortalField(label = "Files", renderer = RendererType.RELATION_LIST, showInFilter = false, showInTable = false)
 @PortalRelation(
     targetEntity = TaskRunFile::class,
     editable = false,
-    displayFields = ["fileName", "fileSize"],
-    actions = [RelationRowAction.DOWNLOAD]   // download button on each row
+    displayFields = ["fileName", "fileSizeBytes"],
+    actions = [RelationRowAction.DOWNLOAD],   // download button on each row
+    labelField = "fileName",
+    valueField = "id",
+    parentField = "taskRun"
 )
-@PortalLookup(labelField = "fileName", valueField = "id", parentField = "taskRunId")
 var files: List<TaskRunFile>? = null
 ```
 
-#### `@PortalLookup`
-
-| Parameter | Type | Default | Description |
-|---|---|---|---|
-| `labelField` | `String` | `"name"` | Target entity field shown as label in picker and table cell |
-| `valueField` | `String` | `"id"` | Target entity field stored as value (foreign key) |
-| `filterQuery` | `String` | `""` | Permanent HQL WHERE filter (alias `e.`), e.g. `"e.isActive = true"` |
-| `dependsOn` | `String` | `""` | Name of another form field — enables cascading dropdown |
-| `maxResults` | `Int` | `100` | Max options returned by `/lookup` per request |
-| `parentField` | `String` | `""` | `RELATION_LIST` only: name of the field in the **target** entity holding the FK back to the parent (e.g. `"memberId"` on `Loan` when the list is on `Member`). When set, the frontend auto-fetches related records via `GET /api/portal/data/{target}?filter[parentField][eq]={parentId}` instead of relying on the parent's `getById` response |
-
----
-
 ### Differences: `displayFields` vs `searchFields` vs `labelField`
 
-| Property | Annotation | What it does |
-|---|---|---|
-| `labelField` | `@PortalLookup` | Field shown as label in the table cell and dropdown option |
-| `displayFields` | `@PortalRelation` | Columns shown in `RELATION_LIST` table / extra info alongside the label |
-| `searchFields` | `@PortalRelation` | Fields used for text search when user types in the picker |
+| Property | What it does |
+|---|---|
+| `labelField` | Field shown as label in the table cell and dropdown option |
+| `displayFields` | Columns shown in `RELATION_LIST` table / extra info alongside the label |
+| `searchFields` | Fields used for text search when user types in the picker |
 
 Typical pattern — all three can be different:
 ```kotlin
+@ManyToOne(fetch = FetchType.LAZY)
+@JoinColumn(name = "customer_id")
 @PortalRelation(
     targetEntity = DemoCustomer::class,
     displayFields = ["name", "email", "phone"],   // 3 columns in the relation list
-    searchFields  = ["name", "email"]             // search by name and email
-)
-@PortalLookup(
-    labelField = "name",   // table cell shows only the name
+    searchFields  = ["name", "email"],            // search by name and email
+    labelField = "name",                          // table cell shows only the name
     valueField = "id"
 )
-var customerId: Long? = null
+var customer: DemoCustomer? = null
 ```
 
 ---
@@ -958,7 +997,8 @@ var customerId: Long? = null
 
 **1. Simple ManyToOne relation (customer's country):**
 ```kotlin
-@Column
+@ManyToOne(fetch = FetchType.LAZY)
+@JoinColumn(name = "country_id")
 @PortalField(
     label = "Country",
     tab = "CONTACT",
@@ -971,15 +1011,17 @@ var customerId: Long? = null
     targetEntity = DemoCountry::class,
     editable = true,
     displayFields = ["name", "code"],
-    searchFields = ["name", "code"]
+    searchFields = ["name", "code"],
+    labelField = "name",
+    valueField = "id"
 )
-@PortalLookup(labelField = "name", valueField = "id")
-var countryId: Long? = null
+var country: DemoCountry? = null
 ```
 
-**2. Read-only relation (orderId on an order item):**
+**2. Read-only relation (order on an order item):**
 ```kotlin
-@Column
+@ManyToOne(fetch = FetchType.LAZY)
+@JoinColumn(name = "order_id")
 @PortalField(
     label = "Order",
     order = 1,
@@ -990,53 +1032,53 @@ var countryId: Long? = null
     targetEntity = DemoOrder::class,
     editable = false,                              // picker locked
     displayFields = ["orderNumber"],
-    searchFields = ["orderNumber"]
+    searchFields = ["orderNumber"],
+    labelField = "orderNumber",
+    valueField = "id"
 )
-@PortalLookup(labelField = "orderNumber", valueField = "id")
-var orderId: Long? = null
+var order: DemoOrder? = null
 ```
 
 **3. Relation with filter (active categories only):**
 ```kotlin
-@Column
+@ManyToOne(fetch = FetchType.LAZY)
+@JoinColumn(name = "category_id")
 @PortalField(label = "Category", order = 3, renderer = RendererType.RELATION)
 @PortalRelation(
     targetEntity = DemoCategory::class,
     displayFields = ["name"],
-    searchFields = ["name"]
-)
-@PortalLookup(
+    searchFields = ["name"],
     labelField = "name",
     valueField = "id",
     filterQuery = "e.isActive = true"             // permanent HQL filter
 )
-var categoryId: Long? = null
+var category: DemoCategory? = null
 ```
 
-**4. Cascading dropdowns (country → region):**
+**4. Cascading dropdowns (genre → book):**
 ```kotlin
-// Source field
-@Column
-@PortalField(label = "Country", order = 5, renderer = RendererType.RELATION)
-@PortalRelation(targetEntity = DemoCountry::class, searchFields = ["name"])
-@PortalLookup(labelField = "name", valueField = "id")
-var countryId: Long? = null
+// Helper field on the Loan form (value NOT persisted)
+@Transient
+@PortalField(label = "Filter by genre (helper)", order = 2, renderer = RendererType.RELATION)
+@PortalRelation(targetEntity = Genre::class, searchFields = ["name"])
+var genre: Long? = null                          // same name as the Book association
 
-// Dependent field — filtered by countryId value
-@Column
-@PortalField(label = "Region", order = 6, renderer = RendererType.RELATION)
-@PortalRelation(targetEntity = Region::class, searchFields = ["name"])
-@PortalLookup(
-    labelField = "name",
-    valueField = "id",
-    dependsOn = "countryId"   // when countryId = 42, backend filters: e.countryId = 42
+// Dependent field — filtered by the genre value;
+// backend filters: e.genre.id = 7
+@ManyToOne(fetch = FetchType.LAZY)
+@JoinColumn(name = "book_id", nullable = false)
+@PortalField(label = "Book", order = 3, renderer = RendererType.RELATION)
+@PortalRelation(
+    targetEntity = Book::class,
+    searchFields = ["title", "isbn"],
+    dependsOn = "genre"
 )
-var regionId: Long? = null
+var book: Book? = null
 ```
 
 **5. Read-only `RELATION_LIST` (customer's orders):**
 ```kotlin
-@Transient
+@OneToMany(mappedBy = "customer", fetch = FetchType.LAZY)
 @PortalField(
     label = "Orders",
     tab = "SYSTEM",
@@ -1051,15 +1093,16 @@ var regionId: Long? = null
     targetEntity = DemoOrder::class,
     editable = false,                              // read-only list
     displayFields = ["orderNumber", "orderDate", "totalAmount", "status"],
-    searchFields = ["orderNumber"]
+    searchFields = ["orderNumber"],
+    labelField = "orderNumber",
+    valueField = "id"
 )
-@PortalLookup(labelField = "orderNumber", valueField = "id")
 var orders: List<DemoOrder>? = null
 ```
 
 **6. Inline-editable `RELATION_LIST` with limit (order items):**
 ```kotlin
-@Transient
+@OneToMany(mappedBy = "order", fetch = FetchType.LAZY)
 @PortalField(
     label = "Order Items",
     tab = "ITEMS",
@@ -1073,48 +1116,51 @@ var orders: List<DemoOrder>? = null
     targetEntity = DemoOrderItem::class,
     editable = true,
     inlineEdit = true,                             // edit directly in the embedded table
-    displayFields = ["productId", "quantity", "unitPrice"],
+    displayFields = ["product", "quantity", "unitPrice"],
     maxItems = 100,                                // max 100 items
-    orderBy = "id ASC"
+    orderBy = "id ASC",
+    labelField = "id",
+    valueField = "id"
 )
-@PortalLookup(labelField = "productId", valueField = "id")
 var items: List<DemoOrderItem>? = null
 ```
 
 **7. Relation with on-the-fly record creation:**
 ```kotlin
-@Column
+@ManyToOne(fetch = FetchType.LAZY)
+@JoinColumn(name = "supplier_id")
 @PortalField(label = "Supplier", order = 5, renderer = RendererType.RELATION)
 @PortalRelation(
     targetEntity = DemoSupplier::class,
     displayFields = ["name"],
     searchFields = ["name"],
-    createAllowed = true                          // "Add new supplier" in the picker
+    createAllowed = true,                          // "Add new supplier" in the picker
+    labelField = "name",
+    valueField = "id"
 )
-@PortalLookup(labelField = "name", valueField = "id")
-var supplierId: Long? = null
+var supplier: DemoSupplier? = null
 ```
 
 **8. Relation with a non-ID key:**
 ```kotlin
-// FK stores the ISO "code" instead of numeric id
-@Column(length = 3)
+// Lookup stores the ISO "code" instead of numeric id
+@ManyToOne(fetch = FetchType.LAZY)
+@JoinColumn(name = "country_id")
 @PortalField(label = "Country (code)", order = 4, renderer = RendererType.RELATION)
 @PortalRelation(
     targetEntity = DemoCountry::class,
     displayFields = ["name"],
-    searchFields = ["name", "code"]
-)
-@PortalLookup(
+    searchFields = ["name", "code"],
     labelField = "name",
     valueField = "code"                           // stores ISO code, not id
 )
-var countryCode: String? = null
+var country: DemoCountry? = null
 ```
 
 **9. Self-referencing relation (parent category):**
 ```kotlin
-@Column
+@ManyToOne(fetch = FetchType.LAZY)
+@JoinColumn(name = "parent_id")
 @PortalField(
     label = "Parent Category",
     order = 5,
@@ -1126,10 +1172,11 @@ var countryCode: String? = null
     targetEntity = DemoCategory::class,           // same class!
     editable = true,
     displayFields = ["name"],
-    searchFields = ["name"]
+    searchFields = ["name"],
+    labelField = "name",
+    valueField = "id"
 )
-@PortalLookup(labelField = "name", valueField = "id")
-var parentId: Long? = null
+var parent: DemoCategory? = null
 ```
 
 ---
@@ -1137,20 +1184,17 @@ var parentId: Long? = null
 ### Required annotation order on a field
 
 ```kotlin
-@Column(...)                    // 1. JPA
-@PortalField(                   // 2. UI field declaration
+@ManyToOne(...) / @OneToMany(...)   // 1. JPA association (source of truth)
+@JoinColumn(...)                    // 1b. FK mapping (to-one owning side)
+@PortalField(                       // 2. UI field declaration
     renderer = RendererType.RELATION,
     ...
 )
-@PortalRelation(                // 3. Relation configuration
+@PortalRelation(                    // 3. Relation presentation + delete marker
     targetEntity = ...,
     ...
 )
-@PortalLookup(                  // 4. Lookup configuration
-    labelField = "name",
-    valueField = "id"
-)
-var xyzId: Long? = null
+var country: DemoCountry? = null
 ```
 
 ---
@@ -1159,12 +1203,15 @@ var xyzId: Long? = null
 
 | Mistake | Effect | Fix |
 |---|---|---|
-| Missing `@PortalLookup` on a RELATION field | Frontend uses defaults `name`/`id` for label/value fields | Always add `@PortalLookup` |
-| `RELATION_LIST` without `@Transient` | Hibernate tries to map the collection as a column — startup error | Add `@Transient` |
+| `@PortalRelation` on a raw numeric key without an association | Build fails (legality table: raw key without JPA association) | Model a `@ManyToOne`/`@OneToOne` association; put the annotations on it |
+| `RELATION_LIST` on `@Transient` instead of `@OneToMany` | Build fails (no inverse-side mapping) | Use `@OneToMany(mappedBy = "...")` pointing at the owning association |
+| `RELATION_LIST` `@OneToMany` without `mappedBy` | Build fails (child list must derive from the inverse side) | Add `mappedBy` with the owning field name |
+| `cascadeDelete = true` without JPA cascade | Build fails (marker must be backed by `cascade = REMOVE`/`ALL` or orphan removal) | Add the JPA cascade — or drop the marker and accept blocking (default) |
 | `filterQuery` using an alias other than `e` | HQL runtime error | Always use `e.fieldName` |
-| `dependsOn` refers to a non-existent field | Cascading filter silently does nothing | Double-check the exact field name (case-sensitive) |
+| `filterQuery` referencing a non-existent target field | Build fails (unknown field in picker scope) | Reference an existing field of the target entity |
+| `dependsOn` refers to a non-existent form field | Build fails | Double-check the exact field name (case-sensitive); it must also name the target association |
 | `showInFilter = true` on `RELATION_LIST` | Relation lists cannot be filtered — nonsensical | Set `showInFilter = false` |
-| Missing `targetEntity` with ambiguous collection | Framework may infer the wrong class | Always explicitly set `targetEntity` |
+| `targetEntity` inconsistent with the association type | Build fails (override must match the domain model) | Fix the override or drop it and let the framework derive the target |
 
 ---
 
@@ -1967,7 +2014,8 @@ class Customer {
     )
     var phone: String = ""
 
-    @Column
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "country_id")
     @PortalField(
         label = "Country",
         tab = "CONTACT", order = 3,
@@ -1979,10 +2027,11 @@ class Customer {
         targetEntity = Country::class,
         editable = true,
         displayFields = ["name", "code"],
-        searchFields = ["name", "code"]
+        searchFields = ["name", "code"],
+        labelField = "name",
+        valueField = "id"
     )
-    @PortalLookup(labelField = "name", valueField = "id")
-    var countryId: Long? = null
+    var country: Country? = null
 
     @Column
     @PortalField(
@@ -2055,8 +2104,8 @@ class Customer {
 | `Boolean` | `BOOLEAN` |
 | `Enum` | `SELECT` with `selectEnum` |
 | Comma-separated enum list | `MULTI_SELECT` with `selectEnum` |
-| Foreign key (`Long?`) | `RELATION` with `@PortalRelation` + `@PortalLookup` |
-| Entity collection | `RELATION_LIST` with `@PortalRelation` + `@PortalLookup` |
+| To-one association (`@ManyToOne`) | `RELATION` with `@PortalRelation` |
+| Entity collection (`@OneToMany`) | `RELATION_LIST` with `@PortalRelation` |
 | `String` (file path) | `FILE` |
 
 ### How to hide the ID field?
@@ -2136,16 +2185,25 @@ The framework automatically filters out records with `deleted = true` in all lis
 
 ### How to configure cascading dropdowns?
 
-Use `@PortalLookup(dependsOn = "parentFieldName")`. The frontend will automatically pass the parent field's current value as a filter parameter when fetching options from the `/lookup` endpoint.
+Use `@PortalRelation(dependsOn = "...")` together with a helper picker on the same form. The frontend automatically passes the helper's current value as a filter parameter when fetching options from the `/lookup` endpoint. The helper name must match the **association on the target entity** (backend filters `e.{dependsOn}.id`).
 
 ```kotlin
-// Country (source)
-@PortalLookup(labelField = "name", valueField = "id")
-var countryId: Long? = null
+// Genre helper on the Loan form (value NOT persisted)
+@Transient
+@PortalField(label = "Filter by genre", renderer = RendererType.RELATION)
+@PortalRelation(targetEntity = Genre::class, searchFields = ["name"])
+var genre: Long? = null
 
-// City (depends on country)
-@PortalLookup(labelField = "name", valueField = "id", dependsOn = "countryId")
-var cityId: Long? = null
+// Book (depends on genre) — backend adds: AND e.genre.id = :depVal
+@ManyToOne(fetch = FetchType.LAZY)
+@JoinColumn(name = "book_id", nullable = false)
+@PortalField(label = "Book", renderer = RendererType.RELATION)
+@PortalRelation(
+    targetEntity = Book::class,
+    searchFields = ["title", "isbn"],
+    dependsOn = "genre"
+)
+var book: Book? = null
 ```
 
 ### Recommended annotation order on a field
@@ -2153,12 +2211,12 @@ var cityId: Long? = null
 For readability and consistency:
 
 ```kotlin
-@Column(...)             // JPA
+@ManyToOne(...) / @OneToMany(...) // JPA association (if applicable)
+@JoinColumn(...)         // FK mapping (to-one owning side, if applicable)
 @Enumerated(...)         // JPA (optional)
 @Regex(...)              // Pattern validation
 @PortalField(...)        // UI field declaration
-@PortalRelation(...)     // Relation configuration (if applicable)
-@PortalLookup(...)       // Lookup configuration (if applicable)
+@PortalRelation(...)     // Relation presentation (if applicable)
 @PortalDependency(...)   // Conditional rules (if applicable, repeatable)
 var fieldName: Type = defaultValue
 ```
@@ -2367,8 +2425,7 @@ Examples:
 | `@PortalAction` | Class | **Yes** | Declares an action button with handler, optional form, confirmation dialog |
 | `@PortalSecurity` | Class | No | Role-based access control for view/edit/delete/action + row-level ownership |
 | `@PortalField` | Field/Function | No | Declares a UI field; sets renderer, filter type, validation constraints |
-| `@PortalRelation` | Field | No | Configures RELATION/RELATION_LIST target entity, display options, per-row actions |
-| `@PortalLookup` | Field/Function | No | Configures lookup label/value fields, filter query, cascading dependency, parentField |
+| `@PortalRelation` | Field | No | Presentation for a RELATION/RELATION_LIST association: target override, display options, picker filters, delete marker, per-row actions |
 | `@PortalDependency` | Field/Function | **Yes** | Conditional visibility, allowed values, and numeric range rules |
 | `@PortalFormField` | Field | No | Describes a field in an action form model (use `@field:` target) |
 | `@Regex` | Field | No | Attaches a regex pattern for frontend client-side validation |

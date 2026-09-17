@@ -92,6 +92,12 @@ class NotifyReadersHandler {
 }
 // ─── Encja: Książka ────────────────────────────────────────────────────────
 @Entity
+@Table(
+    indexes = [
+        Index(name = "idx_book_author_id", columnList = "author_id"),
+        Index(name = "idx_book_genre_id", columnList = "genre_id")
+    ]
+)
 @PortalEntity(
     label = "Książka",
     labelKey = "entity.book",
@@ -275,7 +281,8 @@ class Book : AuditableEntity() {
     )
     var metadata: String = ""
     // ─── Zakładka RELATIONS ──────────────────────────────────────────────────
-    @Column
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "author_id")
     @PortalField(
         label = "Autor", labelKey = "field.book.authorId",
         tab = "RELATIONS", order = 1,
@@ -293,8 +300,9 @@ class Book : AuditableEntity() {
         filterQuery = "e.isActive = true",
         maxResults = 100
     )
-    var authorId: Long? = null
-    @Column
+    var author: Author? = null
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "genre_id")
     @PortalField(
         label = "Gatunek", labelKey = "field.book.genreId",
         tab = "RELATIONS", order = 2,
@@ -311,5 +319,5 @@ class Book : AuditableEntity() {
         filterQuery = "e.isActive = true",
         maxResults = 200
     )
-    var genreId: Long? = null
+    var genre: Genre? = null
 }

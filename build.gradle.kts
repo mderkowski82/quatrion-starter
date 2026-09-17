@@ -9,7 +9,7 @@ group = "dev.quatrion"
 // w quatrion-saas — publikuje rownolegle wersje CalVer i alias "latest").
 // Wyjatek awaryjny (brak dostepu do Central): lokalna publikacja SNAPSHOT
 // przez build-and-publish-local.bat — patrz README, sekcja "Tryb awaryjny".
-val quatrionPortalVersion = "latest"
+val quatrionPortalVersion = "1.0.0-SNAPSHOT"
 
 repositories {
     mavenLocal()

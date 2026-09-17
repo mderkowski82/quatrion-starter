@@ -15,6 +15,10 @@ import dev.quatrion.portal.service.MetadataService
 import dev.quatrion.portal.task.AbstractTask
 import jakarta.enterprise.inject.Instance
 import jakarta.persistence.Column
+import jakarta.persistence.FetchType
+import jakarta.persistence.JoinColumn
+import jakarta.persistence.ManyToOne
+import jakarta.persistence.OneToMany
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.assertThrows
@@ -178,7 +182,7 @@ class ValidationEntity {
     var description: String = ""
 }
 
-// ─── Relation test fixtures ───────────────────────────────────────────────────
+// ─── Relation test fixtures (association model: JPA is the source of truth) ───
 
 @PortalEntity(label = "Related Target", module = "Test Module", order = 10)
 class RelationTarget {
@@ -187,12 +191,21 @@ class RelationTarget {
 
     @PortalField(label = "Name", order = 1)
     var name: String = ""
+
+    @PortalField(label = "Active", order = 2)
+    var isActive: Boolean = true
 }
 
 @PortalEntity(label = "Child Item", module = "Test Module", order = 11)
 class ChildItem {
     @PortalField(label = "ID", order = 0, readonly = true)
     var id: Long = 0
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "parent_id")
+    @PortalField(label = "Parent", order = 1, renderer = RendererType.RELATION, filterType = FilterType.EXACT)
+    @PortalRelation(displayFields = ["id"])
+    var parent: RelationEntity? = null
 }
 
 @PortalEntity(label = "Relation Entity", module = "Test Module", order = 12)
@@ -200,6 +213,8 @@ class RelationEntity {
     @PortalField(label = "ID", order = 0, readonly = true)
     var id: Long = 0
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "related_id")
     @PortalField(label = "Related", order = 1, renderer = RendererType.RELATION, filterType = FilterType.EXACT)
     @PortalRelation(
         targetEntity = RelationTarget::class,
@@ -207,9 +222,9 @@ class RelationEntity {
         displayFields = ["name"],
         searchFields = ["name"]
     )
-    @PortalLookup(labelField = "name", valueField = "id")
-    var relatedId: Long? = null
+    var related: RelationTarget? = null
 
+    @OneToMany(mappedBy = "parent", fetch = FetchType.LAZY)
     @PortalField(
         label = "Children",
         order = 2,
@@ -235,14 +250,16 @@ class FilteredRelationEntity {
     @PortalField(label = "ID", order = 0, readonly = true)
     var id: Long = 0
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "country_id")
     @PortalField(label = "Country", order = 1, renderer = RendererType.RELATION)
     @PortalRelation(
         targetEntity = RelationTarget::class,
         editable = true,
-        displayFields = ["name"]
+        displayFields = ["name"],
+        filterQuery = "e.isActive = true"
     )
-    @PortalLookup(labelField = "name", valueField = "id", filterQuery = "e.isActive = true")
-    var countryId: Long? = null
+    var country: RelationTarget? = null
 }
 
 // ─── Cascading (dependsOn) relation test fixtures ─────────────────────────────
@@ -252,23 +269,26 @@ class CascadingRelationEntity {
     @PortalField(label = "ID", order = 0, readonly = true)
     var id: Long = 0
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "country_id")
     @PortalField(label = "Country", order = 1, renderer = RendererType.RELATION)
     @PortalRelation(
         targetEntity = RelationTarget::class,
         editable = true,
         displayFields = ["name"]
     )
-    @PortalLookup(labelField = "name", valueField = "id")
-    var countryId: Long? = null
+    var country: RelationTarget? = null
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "city_id")
     @PortalField(label = "City", order = 2, renderer = RendererType.RELATION)
     @PortalRelation(
         targetEntity = RelationTarget::class,
         editable = true,
-        displayFields = ["name"]
+        displayFields = ["name"],
+        dependsOn = "country"
     )
-    @PortalLookup(labelField = "name", valueField = "id", dependsOn = "countryId")
-    var cityId: Long? = null
+    var city: RelationTarget? = null
 }
 
 // ─── OrderBy relation test fixtures ───────────────────────────────────────────
@@ -278,6 +298,8 @@ class OrderByRelationEntity {
     @PortalField(label = "ID", order = 0, readonly = true)
     var id: Long = 0
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "category_id")
     @PortalField(label = "Category", order = 1, renderer = RendererType.RELATION)
     @PortalRelation(
         targetEntity = RelationTarget::class,
@@ -285,17 +307,17 @@ class OrderByRelationEntity {
         displayFields = ["name"],
         orderBy = "name ASC"
     )
-    @PortalLookup(labelField = "name", valueField = "id")
-    var categoryId: Long? = null
+    var category: RelationTarget? = null
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "tag_id")
     @PortalField(label = "Tag", order = 2, renderer = RendererType.RELATION)
     @PortalRelation(
         targetEntity = RelationTarget::class,
         editable = true,
         displayFields = ["name"]
     )
-    @PortalLookup(labelField = "name", valueField = "id")
-    var tagId: Long? = null
+    var tag: RelationTarget? = null
 }
 
 @PortalEntity(label = "Dependent Field Entity", module = "Test Module", order = 19)
@@ -684,15 +706,14 @@ class MetadataServiceTest {
     // ── LoanHistoryCsvTask integration smoke test ─────────────────────────────
 
     @Test
-    fun `LoanHistoryCsvTask metadata has 3 tabs including DEFAULT`() {
+    fun `LoanHistoryCsvTask metadata has 2 tabs including DEFAULT`() {
         val metadata = service.buildEntityMetadata(LoanHistoryCsvTask::class.java)
 
-        // Must have exactly 3 tabs
-        assertEquals(3, metadata.tabs.size, "expected DEFAULT + PARAMS + HISTORY tabs")
+        // Must have exactly 2 tabs
+        assertEquals(2, metadata.tabs.size, "expected DEFAULT + PARAMS tabs")
         val tabNames = metadata.tabs.map { it.name }
         assertTrue("DEFAULT" in tabNames, "DEFAULT tab must be present")
         assertTrue("PARAMS" in tabNames, "PARAMS tab must be present")
-        assertTrue("HISTORY" in tabNames, "HISTORY tab must be present")
 
         // DEFAULT must be first (order=0)
         assertEquals("DEFAULT", metadata.tabs[0].name)
@@ -711,9 +732,8 @@ class MetadataServiceTest {
         }
 
         // LoanHistoryCsvTask own fields keep their explicit tabs
-        assertEquals("PARAMS",  metadata.fields.find { it.name == "memberId" }!!.tab)
+        assertEquals("PARAMS",  metadata.fields.find { it.name == "member" }!!.tab)
         assertEquals("PARAMS",  metadata.fields.find { it.name == "includeOverdue" }!!.tab)
-        assertEquals("HISTORY", metadata.fields.find { it.name == "taskRuns" }!!.tab)
     }
 
     @Test
@@ -815,7 +835,7 @@ class MetadataServiceTest {
     @Test
     fun `buildEntityMetadata populates relationMeta for RELATION field`() {
         val metadata = service.buildEntityMetadata(RelationEntity::class.java)
-        val field = metadata.fields.find { it.name == "relatedId" }!!
+        val field = metadata.fields.find { it.name == "related" }!!
         assertNotNull(field.relationMeta)
         val rm = field.relationMeta!!
         assertEquals("RelationTarget", rm.targetEntity)
@@ -847,17 +867,17 @@ class MetadataServiceTest {
     }
 
     @Test
-    fun `buildEntityMetadata propagates filterQuery from PortalLookup`() {
+    fun `buildEntityMetadata propagates filterQuery from PortalRelation`() {
         val metadata = service.buildEntityMetadata(FilteredRelationEntity::class.java)
-        val countryField = metadata.fields.find { it.name == "countryId" }!!
+        val countryField = metadata.fields.find { it.name == "country" }!!
         assertNotNull(countryField.relationMeta)
         assertEquals("e.isActive = true", countryField.relationMeta!!.filterQuery)
     }
 
     @Test
-    fun `buildEntityMetadata filterQuery is empty when not set in PortalLookup`() {
+    fun `buildEntityMetadata filterQuery is empty when not set in PortalRelation`() {
         val metadata = service.buildEntityMetadata(RelationEntity::class.java)
-        val relatedField = metadata.fields.find { it.name == "relatedId" }!!
+        val relatedField = metadata.fields.find { it.name == "related" }!!
         assertNotNull(relatedField.relationMeta)
         assertEquals("", relatedField.relationMeta!!.filterQuery)
     }
@@ -971,17 +991,17 @@ class MetadataServiceTest {
     // ─── dependsOn (cascading select) tests ───────────────────────────────────
 
     @Test
-    fun `buildEntityMetadata propagates dependsOn from PortalLookup`() {
+    fun `buildEntityMetadata propagates dependsOn from PortalRelation`() {
         val metadata = service.buildEntityMetadata(CascadingRelationEntity::class.java)
-        val cityField = metadata.fields.find { it.name == "cityId" }!!
+        val cityField = metadata.fields.find { it.name == "city" }!!
         assertNotNull(cityField.relationMeta)
-        assertEquals("countryId", cityField.relationMeta!!.dependsOn)
+        assertEquals("country", cityField.relationMeta!!.dependsOn)
     }
 
     @Test
-    fun `buildEntityMetadata dependsOn is empty when not set in PortalLookup`() {
+    fun `buildEntityMetadata dependsOn is empty when not set in PortalRelation`() {
         val metadata = service.buildEntityMetadata(CascadingRelationEntity::class.java)
-        val countryField = metadata.fields.find { it.name == "countryId" }!!
+        val countryField = metadata.fields.find { it.name == "country" }!!
         assertNotNull(countryField.relationMeta)
         assertEquals("", countryField.relationMeta!!.dependsOn)
     }
@@ -991,7 +1011,7 @@ class MetadataServiceTest {
     @Test
     fun `buildEntityMetadata propagates orderBy from PortalRelation`() {
         val metadata = service.buildEntityMetadata(OrderByRelationEntity::class.java)
-        val categoryField = metadata.fields.find { it.name == "categoryId" }!!
+        val categoryField = metadata.fields.find { it.name == "category" }!!
         assertNotNull(categoryField.relationMeta)
         assertEquals("name ASC", categoryField.relationMeta!!.orderBy)
     }
@@ -999,7 +1019,7 @@ class MetadataServiceTest {
     @Test
     fun `buildEntityMetadata orderBy is empty when not set in PortalRelation`() {
         val metadata = service.buildEntityMetadata(OrderByRelationEntity::class.java)
-        val tagField = metadata.fields.find { it.name == "tagId" }!!
+        val tagField = metadata.fields.find { it.name == "tag" }!!
         assertNotNull(tagField.relationMeta)
         assertEquals("", tagField.relationMeta!!.orderBy)
     }

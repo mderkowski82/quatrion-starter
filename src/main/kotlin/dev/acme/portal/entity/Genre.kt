@@ -7,11 +7,12 @@ import jakarta.persistence.*
 
 // ─── Encja: Gatunek literacki ────────────────────────────────────────────────
 // Demonstracja: COLOR renderer, samoreferencja (RELATION), softDelete,
-// allowDelete=false, @PortalLookup z filterQuery + maxResults, płaski formularz
+// allowDelete=false, @PortalRelation z filterQuery + maxResults, płaski formularz
 // FilterType: CONTAINS, STARTS_WITH, BOOLEAN, EXACT
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Entity
+@Table(indexes = [Index(name = "idx_genre_parent_id", columnList = "parent_id")])
 @PortalEntity(
     label = "Gatunek",
     labelKey = "entity.genre",
@@ -102,7 +103,8 @@ class Genre : AuditableEntity() {
     var isActive: Boolean = true
 
     // Samoreferencja: gatunek nadrzędny (np. "Fantastyka" → "Fantastyka naukowa")
-    @Column
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "parent_id")
     @PortalField(
         label = "Gatunek nadrzędny",
         labelKey = "field.genre.parentId",
@@ -122,7 +124,7 @@ class Genre : AuditableEntity() {
         filterQuery = "e.isActive = true",
         maxResults = 200
     )
-    var parentId: Long? = null
+    var parent: Genre? = null
 
     // Wymagane dla softDelete = true w @PortalEntity
     @Column(nullable = false)

@@ -17,10 +17,11 @@ import java.time.format.DateTimeFormatter
 /**
  * Serwis wykonawczy dla [dev.acme.portal.task.LoanHistoryCsvTask] — implementuje [TaskExecutor].
  *
- * Generuje plik CSV z historią wypożyczeń. Gdy [LoanHistoryCsvTask.memberId] jest null →
+ * Generuje plik CSV z historią wypożyczeń. Gdy [LoanHistoryCsvTask.member] jest null →
  * eksportuje wypożyczenia wszystkich czytelników.
  *
  * Kolumny: id, memberId, bookId, bookTitle, status, loanDate, dueDate, returnDate, renewalCount, createdAt
+ * (nagłówki celowo stabilne — wartości to identyfikatory powiązanych rekordów).
  *
  * Odkrywany automatycznie przez [RunTaskSyncHandler] / [RunTaskAsyncHandler] / [TaskSchedulerService]
  * przez CDI `Instance<TaskExecutor<*>>` — brak ręcznej rejestracji.
@@ -39,37 +40,66 @@ class LoanHistoryCsvTaskService : TaskExecutor<LoanHistoryCsvTask> {
     // ── TaskExecutor API ──────────────────────────────────────────────────────
 
     override suspend fun generateResult(task: LoanHistoryCsvTask): TaskExecutionResult {
-        val loans = queryLoans(task.memberId, task.includeOverdue)
+        val memberId = resolveMemberId(task.id)
+        val loans = queryLoans(memberId, task.includeOverdue)
         val (csvBytes, rowCount) = buildCsvPair(loans)
         return TaskExecutionResult(
             bytes = csvBytes,
-            fileName = buildFileName(task.id, task.memberId),
+            fileName = buildFileName(task.id, memberId),
             contentType = "text/csv; charset=UTF-8",
             rowCount = rowCount
         )
     }
 
     override fun generateResultUni(task: LoanHistoryCsvTask): Uni<TaskExecutionResult> {
-        return queryLoansUni(task.memberId, task.includeOverdue)
-            .map { loans ->
-                val (csvBytes, rowCount) = buildCsvPair(loans)
-                TaskExecutionResult(
-                    bytes = csvBytes,
-                    fileName = buildFileName(task.id, task.memberId),
-                    contentType = "text/csv; charset=UTF-8",
-                    rowCount = rowCount
-                )
+        return resolveMemberIdUni(task.id)
+            .flatMap { memberId ->
+                queryLoansUni(memberId, task.includeOverdue)
+                    .map { loans ->
+                        val (csvBytes, rowCount) = buildCsvPair(loans)
+                        TaskExecutionResult(
+                            bytes = csvBytes,
+                            fileName = buildFileName(task.id, memberId),
+                            contentType = "text/csv; charset=UTF-8",
+                            rowCount = rowCount
+                        )
+                    }
             }
+    }
+
+    // ── Odczyt parametru member bez inicjalizacji lazy ─────────────────────────
+    // generateResult dostaje encję oderwaną od sesji — bezpośredni odczyt
+    // task.member?.id groziłby LazyInitializationException. Identyfikator celu
+    // jest wyciągany zapytaniem (t.member.id nie wymaga inicjalizacji grafu).
+
+    private suspend fun resolveMemberId(taskId: Long): Long? {
+        return sf().withSession { session ->
+            session.createQuery(
+                "SELECT t.member.id FROM LoanHistoryCsvTask t WHERE t.id = :id",
+                Long::class.java
+            ).setParameter("id", taskId).resultList
+        }.awaitSuspending().firstOrNull()
+    }
+
+    private fun resolveMemberIdUni(taskId: Long): Uni<Long?> {
+        return sf().withSession { session ->
+            session.createQuery(
+                "SELECT t.member.id FROM LoanHistoryCsvTask t WHERE t.id = :id",
+                Long::class.java
+            ).setParameter("id", taskId).resultList
+        }.map { it.firstOrNull() }
     }
 
     // ── Zapytania JPQL ────────────────────────────────────────────────────────
 
     private suspend fun queryLoans(memberId: Long?, includeOverdue: Boolean): List<Loan> {
         val conditions = mutableListOf<String>()
-        if (memberId != null) conditions.add("e.memberId = :memberId")
+        if (memberId != null) conditions.add("e.member.id = :memberId")
         if (!includeOverdue) conditions.add("e.status <> :overdueStatus")
         val whereClause = if (conditions.isEmpty()) "" else "WHERE ${conditions.joinToString(" AND ")}"
-        val hql = "FROM Loan e $whereClause ORDER BY e.loanDate DESC"
+        // To-one dociągnięte join-fetch (bez duplikacji wierszy), żeby odczyt
+        // identyfikatorów w buildCsvPair nie wymagał otwartej sesji.
+        val hql = "FROM Loan e LEFT JOIN FETCH e.member LEFT JOIN FETCH e.book $whereClause ORDER BY e.loanDate DESC"
         return sf().withSession { session ->
             val q = session.createQuery(hql, Loan::class.java)
             if (memberId != null) q.setParameter("memberId", memberId)
@@ -80,10 +110,12 @@ class LoanHistoryCsvTaskService : TaskExecutor<LoanHistoryCsvTask> {
 
     private fun queryLoansUni(memberId: Long?, includeOverdue: Boolean): Uni<List<Loan>> {
         val conditions = mutableListOf<String>()
-        if (memberId != null) conditions.add("e.memberId = :memberId")
+        if (memberId != null) conditions.add("e.member.id = :memberId")
         if (!includeOverdue) conditions.add("e.status <> :overdueStatus")
         val whereClause = if (conditions.isEmpty()) "" else "WHERE ${conditions.joinToString(" AND ")}"
-        val hql = "FROM Loan e $whereClause ORDER BY e.loanDate DESC"
+        // To-one dociągnięte join-fetch (bez duplikacji wierszy), żeby odczyt
+        // identyfikatorów w buildCsvPair nie wymagał otwartej sesji.
+        val hql = "FROM Loan e LEFT JOIN FETCH e.member LEFT JOIN FETCH e.book $whereClause ORDER BY e.loanDate DESC"
         return sf().withSession { session ->
             val q = session.createQuery(hql, Loan::class.java)
             if (memberId != null) q.setParameter("memberId", memberId)
@@ -99,8 +131,8 @@ class LoanHistoryCsvTaskService : TaskExecutor<LoanHistoryCsvTask> {
             appendLine("id,memberId,bookId,bookTitle,status,loanDate,dueDate,returnDate,renewalCount,createdAt")
             for (loan in loans) {
                 append(loan.id).append(',')
-                append(loan.memberId ?: "").append(',')
-                append(loan.bookId ?: "").append(',')
+                append(loan.member?.id ?: "").append(',')
+                append(loan.book?.id ?: "").append(',')
                 append(escapeCsv(loan.bookTitle)).append(',')
                 append(loan.status).append(',')
                 append(escapeCsv(loan.loanDate)).append(',')
